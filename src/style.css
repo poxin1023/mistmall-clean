@@ -1,0 +1,46 @@
+:root{
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 重點：不要用 Vite 範本的置中 flex，會把整站排版搞壞 */
+body{
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #f6f7fb;
+  color: #111827;
+}
+
+/* 重點：#app 不要強制置中與 padding，交給各頁自己的 container 控制 */
+#app{
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* 連結 */
+a{
+  color: inherit;
+  text-decoration: none;
+}
+
+/* 全站 button 基礎：不要覆蓋你 .btn 系統，只做保底 */
+button{
+  font-family: inherit;
+}
+
+/* 全站 primary 按鈕：藍底白字（加入購物車等共用） */
+.btn.primary{
+  background: #2563eb;
+  color: #ffffff;
+  border: 1px solid #2563eb;
+}
+
+.btn.primary:disabled{
+  opacity: 0.5;
+  cursor: not-allowed;
+}
