@@ -1,0 +1,13 @@
+name = "mistmall-clean"
+account_id = "742ec4488f75753b82b2deb34dbd734e"
+main = "worker/index.ts"
+compatibility_date = "2025-01-01"
+
+[vars]
+# 你後台查訂單用的管理密碼
+ADMIN_TOKEN = "mistmall_admin_9xK2PqA7vH3R8D2ZLw"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mistmall_db"
+database_id = "427c4c4d-43d2-4037-8e4f-d3b1d9418357"

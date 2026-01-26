@@ -151,8 +151,13 @@
           <button class="ghost" type="button" @click="open711Map">📍 7-11 地圖選擇</button>
         </div>
 
-        <button class="submit" type="button" :disabled="cart.items.length === 0" @click="submitOrder">
-          提交訂單
+        <button
+          class="submit"
+          type="button"
+          :disabled="cart.items.length === 0 || submitting"
+          @click="submitOrder"
+        >
+          {{ submitting ? '送出中…' : '提交訂單' }}
         </button>
 
         <div v-if="errorMsg" class="err">{{ errorMsg }}</div>
@@ -232,17 +237,14 @@ const STORES: Store[] = (STORES_711 as Store711[]).map(s => ({
   address: s.address
 }))
 
-const form = reactive<{
-  name: string
-  phone: string
-  store: Store | null
-}>({
+const form = reactive<{ name: string; phone: string; store: Store | null }>({
   name: '',
   phone: '',
   store: null
 })
 
 const errorMsg = ref('')
+const submitting = ref(false)
 
 /** 運費規則：運費 60；滿 3000 免運 */
 const FREE_SHIP_THRESHOLD = 3000
@@ -377,9 +379,48 @@ function validPhoneTw(v: string) {
   return /^09\d{8}$/.test(v)
 }
 
-/** ✅ 這裡是你要的：提交後產生訂單號 + 導到成功頁 */
-function submitOrder() {
+/** ✅ 本機開發時要打 Worker；上線同網域時可用相對路徑 */
+function apiBase() {
+  const host = window.location.hostname
+  const WORKER = 'https://mistmall-clean.pubg1023pubg.workers.dev'
+
+  // ✅ 開發/手機測試：localhost、127.*、以及區網 IP（192.168.* / 10.* / 172.16~31.*）
+  const isLocalhost = host === 'localhost' || host === '127.0.0.1'
+  const isLanIp =
+    /^192\.168\.\d+\.\d+$/.test(host) ||
+    /^10\.\d+\.\d+\.\d+$/.test(host) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(host)
+
+  if (isLocalhost || isLanIp) return WORKER
+
+  // ✅ 正式上線：如果你之後把前台跟 API 放同一網域（例如 https://www.xxx.com/api），就走相對路徑
+  return ''
+}
+
+
+async function postJson<T>(path: string, body: any): Promise<T> {
+  const res = await fetch(apiBase() + path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+
+  const text = await res.text()
+  let data: any = null
+  try { data = text ? JSON.parse(text) : null } catch { data = { raw: text } }
+
+  if (!res.ok) {
+    const msg = data?.error || data?.message || `HTTP ${res.status}`
+    throw new Error(msg)
+  }
+  return data as T
+}
+
+/** ✅ 提交訂單：改成真的呼叫 Worker /api/orders，後台才會同步 */
+async function submitOrder() {
   errorMsg.value = ''
+
+  if (submitting.value) return
 
   if (cart.items.length === 0) {
     errorMsg.value = '購物車為空，無法提交訂單。'
@@ -398,27 +439,11 @@ function submitOrder() {
     return
   }
 
-  // ✅ 產生訂單號：ORD + YYYYMMDDHHmmss
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  const ss = String(d.getSeconds()).padStart(2, '0')
-  const orderNo = `ORD${y}${m}${day}${hh}${mm}${ss}`
-  const createdAt = `${y}/${m}/${day} ${hh}:${mm}`
-
-  // ✅ 把購物車商品整理成成功頁要用的 items
+  // ✅ 整理要送到後端的 items（符合 Worker 期待欄位）
   const items = cart.items.map(it => {
-    // 這筆商品的總數量（依 lines 加總）
     const qty = it.lines.reduce((a, l) => a + l.qty, 0)
-
-    // 單價：用加權平均（避免不同規格不同價時顯示錯）
-    const subtotalRaw = itemAmount(it) // ✅ 你此檔案已經有 itemAmount()
+    const subtotalRaw = itemAmount(it)
     const unitPrice = qty > 0 ? Math.round(subtotalRaw / qty) : 0
-
-    // 規格文字（例如：葡萄 x2）
     const specs = it.lines.map(l => `${l.name} ×${l.qty}`)
 
     return {
@@ -426,53 +451,73 @@ function submitOrder() {
       qty,
       unitPrice,
       subtotal: subtotalRaw,
-      specs
+      specs // 送陣列，後端會 join(" / ")
     }
   })
 
-  // ✅ 成功頁會讀 sessionStorage.last_order
-  const payload = {
-    orderNo,
-    createdAt,
-    total: grandTotal.value,
+  const requestBody = {
     name: form.name,
     phone: form.phone,
     storeNo: form.store.no,
     storeName: form.store.name,
     storeAddress: form.store.address,
-    items // ✅ 關鍵：把商品一起存進去
+    amount: grandTotal.value,
+    items
   }
 
-  sessionStorage.setItem('last_order', JSON.stringify(payload))
-  
-// ✅ 把訂單存進 localStorage，提供「訂單查詢頁」使用
-const raw = localStorage.getItem('orders_v1')
-let arr: any[] = []
-
-if (raw) {
+  submitting.value = true
   try {
-    arr = JSON.parse(raw)
-  } catch {
-    arr = []
+    // ✅ 真的送到 Worker（這一步做了，後台 /admin 才看得到）
+    const resp = await postJson<{ ok: boolean; orderNo: string }>('/api/orders', requestBody)
+
+    // 成功頁顯示用（用後端回傳的 orderNo，不再自產）
+    const d = new Date()
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    const hh = String(d.getHours()).padStart(2, '0')
+    const mm = String(d.getMinutes()).padStart(2, '0')
+    const createdAt = `${y}/${m}/${day} ${hh}:${mm}`
+
+    const payload = {
+      orderNo: resp.orderNo,
+      createdAt,
+      total: grandTotal.value,
+      name: form.name,
+      phone: form.phone,
+      storeNo: form.store.no,
+      storeName: form.store.name,
+      storeAddress: form.store.address,
+      items,
+      // UI 用字串（你原本查詢頁可能吃這個）
+      status: '待確認',
+      // 真正後端狀態（可選）
+      rawStatus: 'pending'
+    }
+
+    sessionStorage.setItem('last_order', JSON.stringify(payload))
+
+    // ✅ 也保留到 localStorage 供「查詢訂單」頁使用（沿用你原本邏輯）
+    const raw = localStorage.getItem('orders_v1')
+    let arr: any[] = []
+    if (raw) {
+      try { arr = JSON.parse(raw) } catch { arr = [] }
+      if (!Array.isArray(arr)) arr = []
+    }
+    arr.push(payload)
+    localStorage.setItem('orders_v1', JSON.stringify(arr))
+
+    // ✅ 清空購物車
+    cart.clear()
+
+    // ✅ 導到成功頁
+    router.push('/order-success')
+  } catch (e: any) {
+    errorMsg.value = `下單失敗：${e?.message || '請稍後再試'}`
+  } finally {
+    submitting.value = false
   }
-  if (!Array.isArray(arr)) arr = []
 }
-
-arr.push({
-  ...payload,
-  status: '待確認'
-})
-
-localStorage.setItem('orders_v1', JSON.stringify(arr))
-
-  // ✅ 清空購物車（示範流程）
-  cart.clear()
-
-  // ✅ 導到成功頁
-  router.push('/order-success')
-}
-
-
 </script>
 
 <style scoped>
@@ -618,7 +663,7 @@ localStorage.setItem('orders_v1', JSON.stringify(arr))
 
 .picked-name{
   font-weight: 900;
-  font-size: 12px;     /* ✅ 華太字體大小 */
+  font-size: 12px;
   color: #065f46;
   white-space: nowrap;
   overflow: hidden;
@@ -632,25 +677,25 @@ localStorage.setItem('orders_v1', JSON.stringify(arr))
   color: #065f46;
   border: 1px solid #a7f3d0;
   background: #d1fae5;
-  padding: 2px 8px;    /* ✅ 修正你原本的 padding: 1px px (錯字) */
+  padding: 2px 8px;
   border-radius: 999px;
 }
 
 .picked-close{
-  width: 26px;          /* ✅ X 寬度 */
-  height: 26px;         /* ✅ X 高度 */
+  width: 26px;
+  height: 26px;
   border-radius: 8px;
   border: 1px solid #a7f3d0;
   background: rgba(255,255,255,.9);
   cursor: pointer;
-  font-size: 15px;      /* ✅ X 字體大小 */
+  font-size: 15px;
   line-height: 1;
   color: #ef4444;
 }
 
 .picked-line{
   margin-top: 2px;
-  font-size: 11px;      /* ✅ 地址字體大小 */
+  font-size: 11px;
   line-height: 1.3;
   color: #065f46;
   font-weight: 600;
@@ -658,7 +703,7 @@ localStorage.setItem('orders_v1', JSON.stringify(arr))
 }
 .picked-phone{ font-weight: 900; }
 
-/* 藍色說明卡：變更內距/字體/間距讓更緊湊 */
+/* 藍色說明卡 */
 .store-info {
   margin-top: 10px;
   border: 1px solid #bfdbfe;

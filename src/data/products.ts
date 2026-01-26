@@ -18,6 +18,8 @@ export type Product = {
   tag: TagKey
   price: number | null
   image: string
+  gallery?: string[]    // ✅ 可選：詳情頁放大用的多圖（只有特定商品需要）
+
   shortDesc: string
   specs: ProductSpec[]
 }
@@ -26,7 +28,7 @@ export type Product = {
  * 工具：給「還沒補齊規格」的商品，先塞一個最小可用規格，避免詳情頁爆掉
  * 之後你補資料只要改 specs 內容，不需要再改任何頁面邏輯。
  */
-function placeholderSpecs(): ProductSpec[] {
+export const placeholderSpecs = (): ProductSpec[] => {
   return [
     {
       specName: '規格',
@@ -36,6 +38,38 @@ function placeholderSpecs(): ProductSpec[] {
 }
 
 export const PRODUCTS: Product[] = [
+  {
+    id: 'meme_7000',
+    name: '韓國 MEME 7000口拋棄式',
+    tag: 'hot',
+    price: 380,
+    image: '/products/meme (2).jpg',
+    shortDesc: '熱銷',
+    specs: [
+      {
+        specName: '口味',
+        options: [
+          { id: 'meme_7000_o01', name: '可樂', stock: 1093, priceDelta: 0 },
+          { id: 'meme_7000_o02', name: '芭樂', stock: 742, priceDelta: 0 },
+          { id: 'meme_7000_o03', name: '草莓', stock: 1186, priceDelta: 0 },
+          { id: 'meme_7000_o04', name: '薄荷', stock: 865, priceDelta: 0 },
+          { id: 'meme_7000_o05', name: '西瓜', stock: 1018, priceDelta: 0 },
+          { id: 'meme_7000_o06', name: '葡萄', stock: 786, priceDelta: 0 },
+          { id: 'meme_7000_o07', name: '藍莓', stock: 1200, priceDelta: 0 },
+          { id: 'meme_7000_o08', name: '綠豆沙', stock: 934, priceDelta: 0 },
+          { id: 'meme_7000_o09', name: '百香果', stock: 1107, priceDelta: 0 },
+          { id: 'meme_7000_o10', name: '哈密瓜', stock: 879, priceDelta: 0 },
+          { id: 'meme_7000_o11', name: '鐵觀音', stock: 1054, priceDelta: 0 },
+          { id: 'meme_7000_o12', name: '北極冰', stock: 742, priceDelta: 0 },
+          { id: 'meme_7000_o13', name: '1特別限定款(隱藏款)', stock: 1189, priceDelta: 0 },
+          { id: 'meme_7000_o14', name: '2特別限定款(隱藏款)', stock: 963, priceDelta: 0 },
+          { id: 'meme_7000_o15', name: '3特別限定款(隱藏款)', stock: 821, priceDelta: 0 },
+          { id: 'meme_7000_o16', name: '4特別限定款(隱藏款)', stock: 1096, priceDelta: 0 }
+        ]
+      }
+    ]
+  },
+
   // 促銷商品（你原本已完成）
   {
     id: 'sp2s_pod_bundle',

@@ -3,7 +3,11 @@
   <HeaderBar />
 
   <div class="container">
-    <div class="h1">精選商品</div>
+    <!-- ✅ 只在這裡把「精選商品」改成打字機顯示（結構不變：仍然是 .h1 這一塊） -->
+    <div class="h1 type-title" aria-label="精選商品">
+      <span class="type-text">{{ typedTitle }}</span><span class="type-caret" aria-hidden="true"></span>
+    </div>
+
     <div class="sub">請選擇您喜歡的商品，然後選擇口味</div>
 
     <TagFilterBar
@@ -80,7 +84,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, watch, onBeforeUnmount } from 'vue'
+import { useRoute } from 'vue-router'
 import HeaderBar from '../components/HeaderBar.vue'
 import TagFilterBar from '../components/TagFilterBar.vue'
 import ProductCard from '../components/ProductCard.vue'
@@ -122,16 +127,82 @@ function showToast(msg: string) {
   }, 2000)
 }
 
+/* =========================
+   ✅ 打字機效果（只影響標題）
+   - 首次進入 products：播放
+   - 每次跳回 products：重播
+   - 離開頁面：清 timer
+========================= */
+const route = useRoute()
+const fullTitle = '精選商品'
+const typedTitle = ref('')
+
+let typingTimer: number | null = null
+
+function startTyping() {
+  if (typingTimer !== null) {
+    window.clearInterval(typingTimer)
+    typingTimer = null
+  }
+
+  typedTitle.value = ''
+  let i = 0
+
+  typingTimer = window.setInterval(() => {
+    typedTitle.value = fullTitle.slice(0, i + 1)
+    i++
+    if (i >= fullTitle.length) {
+      if (typingTimer !== null) window.clearInterval(typingTimer)
+      typingTimer = null
+    }
+  }, 120) // ✅ 速度：80 更快、150 更慢
+}
+
 onMounted(() => {
+  // 你原本的 toast 邏輯
   const msg = sessionStorage.getItem('toast_once')
   if (msg) {
     sessionStorage.removeItem('toast_once')
     showToast(msg)
   }
+
+  // ✅ 首次進入本頁播放
+  startTyping()
+})
+
+// ✅ 每次路由切回 /products 都重播
+watch(
+  () => route.fullPath,
+  (to) => {
+    if (to.startsWith('/products')) startTyping()
+  }
+)
+
+onBeforeUnmount(() => {
+  if (typingTimer !== null) window.clearInterval(typingTimer)
 })
 </script>
 
 <style scoped>
+/* ✅ 打字機：只加新 class，不動你原本 h1 的樣式結構 */
+.type-title{
+  display: inline-flex;
+  align-items: baseline;
+}
+.type-text{
+  white-space: nowrap;
+}
+.type-caret{
+  width: 0.55em;
+  margin-left: 2px;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-1px);
+  animation: caretBlink 0.9s step-end infinite;
+}
+@keyframes caretBlink{
+  50% { opacity: 0; }
+}
+
 .notice-box{
   margin-top: 14px;
   margin-bottom: 90px; /* ✅ 底部留空避免被 FloatingLineButton 遮住 */

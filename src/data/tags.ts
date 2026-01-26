@@ -6,6 +6,7 @@ export type TagKey =
   | 'device_v6'
   | 'mohoo'
   | 'iqos'
+  | 'hot'
 
 export const TAGS: { key: TagKey; label: string; color: string }[] = [
   { key: 'pod_v1', label: '一代煙彈', color: '#2F80ED' },
@@ -14,5 +15,6 @@ export const TAGS: { key: TagKey; label: string; color: string }[] = [
   { key: 'device_v1', label: '一代主機', color: '#9B51E0' },
   { key: 'device_v6', label: '六代主機', color: '#00A3FF' },
   { key: 'mohoo', label: '東京魔盒', color: '#F2994A' },
-  { key: 'iqos', label: 'IQOS/加熱煙', color: '#F2C94C' }
+  { key: 'iqos', label: 'IQOS/加熱煙', color: '#F2C94C' },
+  { key: 'hot', label: '熱銷', color: '#FF4D4F' }
 ]

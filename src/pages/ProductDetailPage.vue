@@ -5,7 +5,13 @@
   <div class="container">
     <div class="panel panel-pad product-head" v-if="product">
       <div class="media">
-        <button class="media-btn" type="button" :disabled="!product.image" @click="product.image && openPreview(product.image)">
+        <!-- ✅ 點封面：一般商品單張放大；meme_7000 走相簿（從第 1 張開始） -->
+        <button
+          class="media-btn"
+          type="button"
+          :disabled="!product.image"
+          @click="product.image && openPreviewByIndex(0)"
+        >
           <div class="media-box">
             <span v-if="!product.image" class="media-empty">商品圖片（待補）</span>
             <img v-else :src="product.image" :alt="product.name" class="media-img" loading="lazy" />
@@ -89,9 +95,42 @@
     </div>
   </div>
 
-  <div v-if="previewUrl" class="preview" @click.self="closePreview">
+  <!-- ✅ 放大預覽：單張 or 相簿（meme_7000） -->
+  <div v-if="isPreviewOpen" class="preview" @click.self="closePreview">
     <button class="preview-close" type="button" aria-label="關閉" @click="closePreview">×</button>
-    <img class="preview-img" :src="previewUrl" alt="商品圖片預覽" />
+
+    <!-- 左右切換按鈕：只有多張才出現 -->
+    <button
+      v-if="previewImages.length > 1"
+      class="preview-nav prev"
+      type="button"
+      aria-label="上一張"
+      @click.stop="prevImage"
+    >
+      ‹
+    </button>
+
+    <div
+      class="preview-stage"
+      @touchstart.passive="onTouchStart"
+      @touchmove.prevent="onTouchMove"
+      @touchend="onTouchEnd"
+    >
+      <img class="preview-img" :src="previewImages[previewIndex]" alt="商品圖片預覽" />
+      <div v-if="previewImages.length > 1" class="preview-counter">
+        {{ previewIndex + 1 }} / {{ previewImages.length }}
+      </div>
+    </div>
+
+    <button
+      v-if="previewImages.length > 1"
+      class="preview-nav next"
+      type="button"
+      aria-label="下一張"
+      @click.stop="nextImage"
+    >
+      ›
+    </button>
   </div>
 </template>
 
@@ -180,7 +219,6 @@ function calcTierUnitPrice(productId: string, selectedQty: number, fallback: num
 
   if (!step || selectedQty <= 0) return firstPrice
 
-  // 1~step => level 0；step+1~2step => level 1 ...
   const level = Math.floor(Math.max(0, selectedQty - 1) / step)
   let price = firstPrice - level * delta
   if (minPrice !== undefined) price = Math.max(minPrice, price)
@@ -193,14 +231,12 @@ const totalPrice = computed(() => {
   const selectedQty = totalQty.value
   if (selectedQty <= 0) return 0
 
-  // ✅ 促銷商品：用「階梯單價」*「應計價數量」
   if (isPromoProduct.value) {
     const unit = calcTierUnitPrice(product.value.id, selectedQty, basePrice.value)
     const payQty = selectedQty - freeDeductQty.value
     return payQty * unit
   }
 
-  // ✅ 一般商品：仍用 basePrice（你目前 spec 沒有 priceDelta，因此先保持）
   return selectedQty * basePrice.value
 })
 
@@ -222,7 +258,6 @@ function addToCart() {
 
   const selectedQty = totalQty.value
 
-  // ✅ 單價：促銷商品走階梯單價；一般商品走 basePrice
   const unit = isPromoProduct.value
     ? calcTierUnitPrice(product.value.id, selectedQty, basePrice.value)
     : basePrice.value
@@ -245,19 +280,112 @@ function addToCart() {
   router.push('/products')
 }
 
-const previewUrl = ref<string | null>(null)
-function openPreview(url: string) { previewUrl.value = url }
-function closePreview() { previewUrl.value = null }
+/* =========================
+   ✅ 圖片放大 + 只有 meme_7000 可左右滑相簿
+   ========================= */
 
-function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') closePreview()
+// 你要做相簿的商品 id（你目前網址是 /product/meme_7000）
+const GALLERY_PRODUCT_ID = 'meme_7000'
+
+// meme_7000 的相簿清單（請把檔案放在 public/products/）
+const memeGallery = [
+  '/products/meme1 (1).jpg',
+  '/products/meme1 (2).jpg',
+  '/products/meme1 (3).jpg',
+  '/products/meme1 (4).jpg',
+  '/products/meme1 (5).jpg',
+  '/products/meme1 (6).jpg',
+  '/products/meme1 (7).jpg',
+  '/products/meme1 (8).jpg',
+  '/products/meme1 (9).jpg',
+  '/products/meme1 (10).jpg',
+  '/products/meme1 (11).jpg',
+  '/products/meme1 (12).jpg',
+  '/products/meme1 (13).jpg',
+  '/products/meme1 (14).jpg',
+  '/products/meme1 (15).jpg',
+  '/products/meme1 (16).jpg',
+  '/products/meme1 (17).jpg',
+  '/products/meme1 (18).jpg',
+  '/products/meme1 (19).jpg',
+  '/products/meme1 (20).jpg',
+  '/products/meme1 (21).jpg',
+  '/products/meme1 (22).jpg',
+  '/products/meme1 (23).jpg',
+  '/products/meme1 (24).jpg',
+  '/products/meme1 (25).jpg'
+]
+
+const isPreviewOpen = ref(false)
+const previewIndex = ref(0)
+
+// ✅ 預覽圖來源：meme_7000 => 相簿；其他 => 單張（product.image）
+const previewImages = computed(() => {
+  if (!product.value) return []
+  if (product.value.id === GALLERY_PRODUCT_ID) return memeGallery
+  return product.value.image ? [product.value.image] : []
+})
+
+function openPreviewByIndex(idx: number) {
+  if (previewImages.value.length === 0) return
+  previewIndex.value = Math.min(Math.max(0, idx), previewImages.value.length - 1)
+  isPreviewOpen.value = true
 }
+
+function closePreview() {
+  isPreviewOpen.value = false
+}
+
+function nextImage() {
+  const n = previewImages.value.length
+  if (n <= 1) return
+  previewIndex.value = (previewIndex.value + 1) % n
+}
+
+function prevImage() {
+  const n = previewImages.value.length
+  if (n <= 1) return
+  previewIndex.value = (previewIndex.value - 1 + n) % n
+}
+
+// 鍵盤：ESC 關閉、左右切換
+function onKeydown(e: KeyboardEvent) {
+  if (!isPreviewOpen.value) return
+  if (e.key === 'Escape') closePreview()
+  if (e.key === 'ArrowRight') nextImage()
+  if (e.key === 'ArrowLeft') prevImage()
+}
+
+// 手勢滑動（手機）
+const touchX = ref<number | null>(null)
+const touchDelta = ref(0)
+
+function onTouchStart(e: TouchEvent) {
+  if (previewImages.value.length <= 1) return
+  touchX.value = e.touches[0]?.clientX ?? null
+  touchDelta.value = 0
+}
+function onTouchMove(e: TouchEvent) {
+  if (previewImages.value.length <= 1) return
+  if (touchX.value === null) return
+  const x = e.touches[0]?.clientX ?? 0
+  touchDelta.value = x - touchX.value
+}
+function onTouchEnd() {
+  if (previewImages.value.length <= 1) return
+  // 門檻：滑動超過 40px 才算翻頁
+  if (touchDelta.value > 40) prevImage()
+  else if (touchDelta.value < -40) nextImage()
+  touchX.value = null
+  touchDelta.value = 0
+}
+
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </script>
 
 <style scoped>
-/* ✅ 你的原樣式保留不動（你貼的那段 그대로） */
+/* ✅ 你的原樣式保留 */
 .container { width: 100%; max-width: 980px; margin: 0 auto; box-sizing: border-box; }
 .product-head { display: flex; gap: 14px; align-items: stretch; }
 .media { flex: 0 0 25%; max-width: 25%; display: flex; }
@@ -278,8 +406,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .spec-name { font-weight: 700; line-height: 1.2; word-break: break-word; overflow-wrap: anywhere; }
 .spec-sub { margin-top: 4px; opacity: 0.85; line-height: 1.2; word-break: break-word; overflow-wrap: anywhere; }
 .qty { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
-.qty-btn { width: 28px; height: 28px; border-radius: 6px; }
-.qty-num { min-width: 18px; text-align: center; font-weight: 700; }
+.qty-btn { width: 48px; height: 48px; border-radius: 12px; font-size: 24px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+.qty-num { min-width: 32px; text-align: center; font-weight: 700; font-size: 16px; }
 .summary .row { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; }
 .summary .total { margin-top: 16px; font-size: 18px; line-height: 1.2; word-break: break-word; overflow-wrap: anywhere; }
 .btn.primary { width: 100%; margin-top: 12px; }
@@ -287,6 +415,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .promo { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #e5e7eb; }
 .promo-title { font-weight: 700; }
 .promo-line { margin-top: 6px; opacity: 0.9; line-height: 1.25; }
+
 @media (max-width: 520px) {
   .product-head { flex-direction: column; gap: 10px; }
   .media { flex: 0 0 auto; max-width: 100%; }
@@ -294,7 +423,72 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   .price { white-space: normal; }
   .layout { grid-template-columns: 1fr; }
 }
-.preview { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); display: grid; place-items: center; padding: 18px; z-index: 9999; }
-.preview-img { max-width: 92vw; max-height: 88vh; object-fit: contain; border-radius: 14px; background: #fff; }
-.preview-close { position: fixed; top: 12px; right: 12px; width: 44px; height: 44px; border-radius: 999px; border: 0; background: rgba(255, 255, 255, 0.95); cursor: pointer; font-size: 28px; line-height: 1; z-index: 10000; }
+
+/* ✅ 預覽層 */
+.preview {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  z-index: 9999;
+}
+.preview-stage {
+  position: relative;
+  max-width: 92vw;
+  max-height: 88vh;
+  display: grid;
+  place-items: center;
+}
+.preview-img {
+  max-width: 92vw;
+  max-height: 88vh;
+  object-fit: contain;
+  border-radius: 14px;
+  background: #fff;
+}
+.preview-close {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.95);
+  cursor: pointer;
+  font-size: 28px;
+  line-height: 1;
+  z-index: 10000;
+}
+
+/* 左右切換按鈕 */
+.preview-nav {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.95);
+  cursor: pointer;
+  font-size: 30px;
+  line-height: 1;
+  z-index: 10000;
+}
+.preview-nav.prev { left: 12px; }
+.preview-nav.next { right: 12px; }
+
+/* 張數提示 */
+.preview-counter {
+  position: absolute;
+  bottom: -42px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #fff;
+  font-size: 13px;
+  opacity: 0.9;
+}
 </style>

@@ -44,3 +44,22 @@ button{
   opacity: 0.5;
   cursor: not-allowed;
 }
+/* =========================
+   Mobile anti-zoom hardening
+   解：點空白處誤觸放大（雙擊縮放 / 觸控縮放）
+   ========================= */
+
+/* iOS/Android：避免文字自動放大造成視覺抖動 */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* 允許正常捲動，但降低雙擊縮放的觸發 */
+body, #app {
+  touch-action: manipulation; /* 不禁用捲動；主要抑制 double-tap zoom */
+}
+
+/* iOS Safari：避免點擊 input 時自動縮放（如果全域字體被壓小會觸發） */
+input, textarea, select, button {
+  font-size: 16px;
+}
