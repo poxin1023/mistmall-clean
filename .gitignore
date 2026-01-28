@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+# ===== Cloudflare Wrangler (local only) =====
+.wrangler/
+.wrangler/**
+
+# Wrangler local DB / state
+*.sqlite
+*.sqlite-journal
