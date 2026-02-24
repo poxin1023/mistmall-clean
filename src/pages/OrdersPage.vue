@@ -334,3 +334,9 @@ function goTelegram() {
   font-size: 13px;
 }
 </style>
+
+</style>
+</style>
+</style>
+</style>
+</style>
