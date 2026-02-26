@@ -3,7 +3,10 @@
   <HeaderBar />
 
   <div class="container">
-    <div class="h1">精選商品</div>
+    <div class="h1 animated-title">
+      <span>{{ typedTitle }}</span>
+      <span class="cursor-underscore" :class="{ blinking: titleTypingDone }">_</span>
+    </div>
     <div class="sub">請選擇您喜歡的商品，然後選擇口味</div>
 
     <TagFilterBar
@@ -80,7 +83,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import HeaderBar from '../components/HeaderBar.vue'
 import TagFilterBar from '../components/TagFilterBar.vue'
 import ProductCard from '../components/ProductCard.vue'
@@ -93,13 +96,22 @@ const all = PRODUCTS
 
 const keyword = ref('')
 const selectedKeys = ref<TagKey[]>([])
+const typedTitle = ref('')
+const titleTypingDone = ref(false)
+
+let titleTimer: number | null = null
+const replayTitleHandler = () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+  startTitleTypewriter()
+}
 
 const filtered = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
   const keys = selectedKeys.value
 
   return all.filter(p => {
-    const matchTag = keys.length ? keys.includes(p.tag) : true
+    const productTags = p.tags ?? [p.tag]
+    const matchTag = keys.length ? keys.some(k => productTags.includes(k)) : true
     const matchKw = kw ? p.name.toLowerCase().includes(kw) : true
     return matchTag && matchKw
   })
@@ -123,15 +135,87 @@ function showToast(msg: string) {
 }
 
 onMounted(() => {
+  startTitleTypewriter()
+  window.addEventListener('products:title-replay', replayTitleHandler)
+
   const msg = sessionStorage.getItem('toast_once')
   if (msg) {
     sessionStorage.removeItem('toast_once')
     showToast(msg)
   }
 })
+
+onBeforeUnmount(() => {
+  window.removeEventListener('products:title-replay', replayTitleHandler)
+  if (titleTimer !== null) {
+    window.clearInterval(titleTimer)
+    titleTimer = null
+  }
+})
+
+function startTitleTypewriter() {
+  const text = '精選商品'
+  typedTitle.value = ''
+  titleTypingDone.value = false
+
+  let index = 0
+  if (titleTimer !== null) {
+    window.clearInterval(titleTimer)
+  }
+
+  titleTimer = window.setInterval(() => {
+    index += 1
+    typedTitle.value = text.slice(0, index)
+
+    if (index >= text.length) {
+      if (titleTimer !== null) {
+        window.clearInterval(titleTimer)
+        titleTimer = null
+      }
+      titleTypingDone.value = true
+    }
+  }, 140)
+}
 </script>
 
 <style scoped>
+.animated-title{
+  display: inline-flex;
+  align-items: baseline;
+  min-height: 1.2em;
+}
+
+.animated-title > span:first-child{
+  font-size: 105%;
+  font-weight: 900;
+  background: linear-gradient(90deg, #2563eb, #7c3aed, #db2777, #2563eb);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: title-flow 4s linear infinite;
+}
+
+.cursor-underscore{
+  margin-left: 1px;
+  color: #7c3aed;
+  opacity: 1;
+}
+
+.cursor-underscore.blinking{
+  animation: cursor-blink .9s steps(1, end) infinite;
+}
+
+@keyframes cursor-blink{
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+@keyframes title-flow{
+  0% { background-position: 0% 50%; }
+  100% { background-position: 220% 50%; }
+}
+
 .notice-box{
   margin-top: 14px;
   margin-bottom: 90px; /* ✅ 底部留空避免被 FloatingLineButton 遮住 */

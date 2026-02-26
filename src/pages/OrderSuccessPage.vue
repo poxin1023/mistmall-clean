@@ -129,10 +129,23 @@
         <button class="btn success" @click="goContinue">繼續購物</button>
       </div>
     </div>
+
+    <!-- 複製成功通知（手機/桌機共用） -->
+    <div v-if="copyToastShow" class="copy-toast" role="status" aria-live="polite">
+      {{ copyToastMsg }}
+    </div>
+
+    <!-- 下單成功後立即顯示圖片彈窗 -->
+    <div v-if="promoModalOpen" class="promo-modal" @click.self="closePromoModal">
+      <div class="promo-frame">
+        <button class="promo-close" type="button" aria-label="關閉圖片彈窗" @click="closePromoModal">×</button>
+        <img class="promo-img" :src="promoImageUrl" alt="下單完成提醒圖片" />
+      </div>
+    </div>
   </template>
   
   <script setup lang="ts">
-  import { computed } from 'vue'
+  import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
   import { useRouter } from 'vue-router'
   import HeaderBar from '../components/HeaderBar.vue'
   
@@ -178,8 +191,58 @@
     }
   })
   
+  const copyToastShow = ref(false)
+  const copyToastMsg = ref('')
+  let copyToastTimer: number | null = null
+
+  const promoModalOpen = ref(false)
+  const promoImageUrl = '/products/127.png'
+
+  onMounted(() => {
+    promoModalOpen.value = true
+  })
+
+  onBeforeUnmount(() => {
+    if (copyToastTimer !== null) {
+      window.clearTimeout(copyToastTimer)
+      copyToastTimer = null
+    }
+  })
+
+  function closePromoModal() {
+    promoModalOpen.value = false
+  }
+
+  function showCopyToast(message: string) {
+    copyToastMsg.value = message
+    copyToastShow.value = true
+    if (copyToastTimer !== null) window.clearTimeout(copyToastTimer)
+    copyToastTimer = window.setTimeout(() => {
+      copyToastShow.value = false
+      copyToastTimer = null
+    }, 1800)
+  }
+
   async function copy(v: string) {
-    await navigator.clipboard.writeText(v)
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(v)
+      } else {
+        const el = document.createElement('textarea')
+        el.value = v
+        el.setAttribute('readonly', '')
+        el.style.position = 'fixed'
+        el.style.top = '-9999px'
+        document.body.appendChild(el)
+        el.focus()
+        el.select()
+        document.execCommand('copy')
+        document.body.removeChild(el)
+      }
+      showCopyToast('複製完成，請回報訂單')
+    } catch {
+      showCopyToast('複製失敗，請手動記下訂單號')
+    }
   }
   
   function goHome() { router.push('/products') }
@@ -216,7 +279,18 @@
   .k{ opacity:.7; font-weight:900; }
   .v{ font-weight:900; text-align:right; }
   .mono{ font-family:ui-monospace, Menlo, Consolas, monospace; }
-  .copy{ margin-left:8px; height:28px; padding:0 10px; border-radius:10px; border:1px solid #e5e7eb; background:#fff; font-weight:900; }
+  .copy{
+    margin-left:8px;
+    height:32px;
+    min-width:56px;
+    padding:0 10px;
+    border-radius:10px;
+    border:1px solid #d1d5db;
+    background:#fff;
+    font-weight:900;
+    cursor:pointer;
+    touch-action: manipulation;
+  }
   
   /* 訂單狀態 badge（顏色＋置中修正） */
   .badge{
@@ -274,5 +348,73 @@
   .btn{ height:48px; border-radius:12px; border:1px solid #e5e7eb; background:#fff; font-weight:900; }
   .btn.primary{ background:#2563eb; color:#fff; border:0; }
   .btn.success{ background:#16a34a; color:#fff; border:0; }
+
+  .copy-toast{
+    position: fixed;
+    left: 50%;
+    bottom: 20px;
+    transform: translateX(-50%);
+    z-index: 10020;
+    max-width: calc(100vw - 28px);
+    padding: 12px 16px;
+    border-radius: 12px;
+    color: #fff;
+    font-weight: 900;
+    font-size: 14px;
+    line-height: 1.35;
+    text-align: center;
+    background: rgba(17, 24, 39, 0.68);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, .2);
+  }
+
+  .promo-modal{
+    position: fixed;
+    inset: 0;
+    z-index: 10010;
+    background: rgba(0,0,0,.62);
+    display: grid;
+    place-items: center;
+    padding: 16px;
+  }
+  .promo-img{
+    max-width: 92vw;
+    max-height: 88vh;
+    object-fit: contain;
+    border-radius: 14px;
+    background: #fff;
+    display: block;
+  }
+  .promo-frame{
+    position: relative;
+    max-width: 92vw;
+    max-height: 88vh;
+    display: grid;
+    place-items: center;
+  }
+  .promo-close{
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    aspect-ratio: 1 / 1;
+    box-sizing: border-box;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.24);
+    backdrop-filter: blur(10px) saturate(160%);
+    -webkit-backdrop-filter: blur(10px) saturate(160%);
+    color: #ffffff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    display: grid;
+    place-items: center;
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 10011;
+  }
   </style>
   

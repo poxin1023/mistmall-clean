@@ -157,12 +157,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   }
   .title{ font-weight:900; color:#111827; }
   .close{
-    width:34px;
-    height:34px;
-    border-radius:10px;
+    width:40px;
+    height:40px;
+    border-radius:50%;
+    aspect-ratio: 1 / 1;
+    box-sizing: border-box;
+    padding: 0;
     border:1px solid #e5e7eb;
     background:#fff;
-    font-size:18px;
+    display: grid;
+    place-items: center;
+    font-size:24px;
+    line-height: 1;
     cursor:pointer;
   }
   

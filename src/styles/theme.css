@@ -46,6 +46,7 @@
   .brand {
     font-weight: 700;
     letter-spacing: 0.5px;
+    font-size: 103%;
   }
   
   .actions {
@@ -128,33 +129,51 @@
   }
   
   .tag {
-    border: 1px solid var(--border);
-    background: #fff;
-    padding: 7px 10px;
+    --tag-color: #3b82f6;
+    border: 1px solid #d7dce5;
+    background: #f9fafb;
+    min-height: 34px;
+    padding: 0 11px;
     border-radius: 999px;
     font-size: 13px;
+    line-height: 1;
+    font-weight: 500;
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    gap: 6px;
     cursor: pointer;
     user-select: none;
+    color: #374151;
+    transition: transform 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease, color 0.14s ease, background-color 0.14s ease, opacity 0.14s ease;
+    transform-origin: center;
   }
   
   .tag .dot {
-    width: 10px;
-    height: 10px;
+    width: 9px;
+    height: 9px;
     border-radius: 999px;
     display: inline-block;
+    flex: 0 0 9px;
   }
   
   .tag.active {
-    border-color: transparent;
-    color: #fff;
+    border-color: color-mix(in oklab, var(--tag-color) 45%, #d7dce5);
+    background: color-mix(in oklab, var(--tag-color) 9%, #f9fafb);
+    color: color-mix(in oklab, var(--tag-color) 82%, #111827);
+    transform: scale(1.01);
+    box-shadow: 0 1px 6px rgba(15, 23, 42, 0.08);
   }
   
   .tag .x {
     font-weight: 700;
-    opacity: 0.9;
+    opacity: 0.85;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 11px;
+    height: 11px;
+    margin-left: 1px;
   }
   
   .grid {
@@ -168,8 +187,9 @@
     .grid { grid-template-columns: repeat(2, 1fr); }
   }
   @media (max-width: 520px) {
-    .grid { grid-template-columns: repeat(2, 1fr); }
+    .grid { grid-template-columns: repeat(2, 1fr); align-items: start; grid-auto-rows: max-content; }
     .container { padding-bottom: 110px; }
+    .card { height: auto; align-self: start; }
   }
   
   .card {

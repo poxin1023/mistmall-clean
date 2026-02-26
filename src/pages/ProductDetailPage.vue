@@ -5,12 +5,14 @@
   <div class="container">
     <div class="panel panel-pad product-head" v-if="product">
       <div class="media">
-        <button class="media-btn" type="button" :disabled="!product.image" @click="product.image && openPreview(product.image)">
-          <div class="media-box">
-            <span v-if="!product.image" class="media-empty">商品圖片（待補）</span>
-            <img v-else :src="product.image" :alt="product.name" class="media-img" loading="lazy" />
-          </div>
-        </button>
+        <div class="media-carousel">
+          <button class="media-btn" type="button" :disabled="!currentImage" @click="openCurrentImagePreview">
+            <div class="media-box">
+              <span v-if="!currentImage" class="media-empty">商品圖片（待補）</span>
+              <img v-else :src="currentImage" :alt="product.name" class="media-img" loading="lazy" />
+            </div>
+          </button>
+        </div>
       </div>
 
       <div class="info">
@@ -61,20 +63,37 @@
         </div>
 
         <div class="promo" v-if="isPromoProduct">
-          <div class="promo-title">多件優惠</div>
-          <div class="promo-line">買10送1、買20送2（同商品不同規格累計）</div>
-
-          <div class="promo-line">
-            目前可送：<b>{{ giftQty }}</b> 件
-            <span v-if="totalQty > 0 && nextGiftNeed > 0">｜再差 {{ nextGiftNeed }} 件可再送</span>
+          <div class="promo-head">
+            <div class="promo-title">多件優惠｜買 10 送 1</div>
+            <span class="promo-pill">同商品不同規格可累計</span>
           </div>
 
-          <div class="promo-line" v-if="freeDeductQty > 0">
-            本次自動不計價：<b>{{ freeDeductQty }}</b> 件（達優惠門檻）
+          <div class="promo-line promo-rule">
+            每滿 11 件，只需付 10 件（22 件付 20、33 件付 30，以此類推）
           </div>
 
-          <div class="promo-line" v-if="totalQty > 0 && totalQty < 10">
-            尚未達成優惠門檻（10 件），仍可正常下單。
+          <div class="promo-metrics">
+            <div class="promo-metric">
+              <span class="promo-k">本次可送</span>
+              <b>{{ giftQty }}</b>
+              <span class="promo-u">件</span>
+            </div>
+            <div class="promo-metric" v-if="freeDeductQty > 0">
+              <span class="promo-k">現省</span>
+              <b>NT$ {{ promoSavedAmount }}</b>
+            </div>
+          </div>
+
+          <div class="promo-line promo-success" v-if="freeDeductQty > 0">
+            已自動折抵 <b>{{ freeDeductQty }}</b> 件金額（本次計價 <b>{{ payableQty }}</b> 件）
+          </div>
+
+          <div class="promo-line promo-cta" v-if="totalQty > 0 && nextGiftNeed > 0">
+            再加 <b>{{ nextGiftNeed }}</b> 件，立刻多送 <b>1</b> 件（下個門檻 {{ nextGiftTarget }} 件）
+          </div>
+
+          <div class="promo-line promo-hint" v-if="totalQty === 0">
+            先選 1 件開始湊單，滿 11 件就自動送 1 件。
           </div>
         </div>
 
@@ -89,9 +108,46 @@
     </div>
   </div>
 
-  <div v-if="previewUrl" class="preview" @click.self="closePreview">
-    <button class="preview-close" type="button" aria-label="關閉" @click="closePreview">×</button>
-    <img class="preview-img" :src="previewUrl" alt="商品圖片預覽" />
+  <div
+    v-if="isPreviewOpen"
+    class="preview"
+    @click.self="closePreview"
+    @touchstart.passive="onPreviewTouchStart"
+    @touchend.passive="onPreviewTouchEnd"
+  >
+    <div class="preview-frame">
+      <button class="preview-close" type="button" aria-label="關閉預覽" @click="closePreview">×</button>
+      <img class="preview-img" :src="previewCurrentImage" alt="商品圖片預覽" />
+    </div>
+    <button
+      v-if="canNavigateImages"
+      class="preview-nav prev"
+      type="button"
+      aria-label="上一張預覽圖片"
+      @click.stop="prevPreviewImage"
+    >
+      ‹
+    </button>
+    <button
+      v-if="canNavigateImages"
+      class="preview-nav next"
+      type="button"
+      aria-label="下一張預覽圖片"
+      @click.stop="nextPreviewImage"
+    >
+      ›
+    </button>
+    <div v-if="canNavigateImages" class="preview-dots">
+      <button
+        v-for="(img, idx) in galleryImages"
+        :key="`preview_${img}_${idx}`"
+        class="preview-dot"
+        :class="{ active: idx === previewImageIndex }"
+        type="button"
+        :aria-label="`預覽第 ${idx + 1} 張`"
+        @click.stop="goToPreviewImage(idx)"
+      />
+    </div>
   </div>
 </template>
 
@@ -101,7 +157,6 @@ import { useRoute, useRouter } from 'vue-router'
 import HeaderBar from '../components/HeaderBar.vue'
 import { PRODUCTS } from '../data/products'
 import { useCartStore } from '../store/cart'
-import { getPromotionByProductId } from '../data/promotions'
 
 const route = useRoute()
 const router = useRouter()
@@ -112,8 +167,32 @@ const product = computed(() => {
   return PRODUCTS.find(p => p.id === id)
 })
 
+const galleryImages = computed(() => {
+  if (!product.value) return [] as string[]
+  const fromArray = (product.value.images ?? []).filter(Boolean)
+  if (fromArray.length > 0) return fromArray
+  if (product.value.image) return [product.value.image]
+  return [] as string[]
+})
+
+const currentImage = computed(() => {
+  if (galleryImages.value.length === 0) return ''
+  return galleryImages.value[0] ?? ''
+})
+
+const canNavigateImages = computed(() => galleryImages.value.length > 1)
+
+function wrapImageIndex(index: number) {
+  const len = galleryImages.value.length
+  if (len <= 0) return 0
+  return (index + len) % len
+}
+
+const SWIPE_THRESHOLD_PX = 36
+
 const basePrice = computed(() => product.value?.price ?? 0)
 const isPromoProduct = computed(() => product.value?.id === 'sp2s_pod_bundle')
+const PROMO_STEP = 11
 
 const qtyMap = reactive<Record<string, number>>({})
 
@@ -142,50 +221,42 @@ const totalQty = computed(() => {
   return sum
 })
 
-/** 買10送1：顯示用 */
+/** 每滿 11 件折 1 件：顯示用 */
 const giftQty = computed(() => {
   if (!isPromoProduct.value) return 0
-  return Math.floor(totalQty.value / 10)
+  return Math.floor(totalQty.value / PROMO_STEP)
 })
 
-/** 你現有規則：非整10才折抵 */
+/** 每滿 11 件折 1 件（11 件收 10 件） */
 const freeDeductQty = computed(() => {
   if (!isPromoProduct.value) return 0
   const q = totalQty.value
-  if (q < 10) return 0
-  if (q % 10 === 0) return 0
-  return Math.floor(q / 10)
+  if (q <= 0) return 0
+  return Math.floor(q / PROMO_STEP)
+})
+
+const payableQty = computed(() => {
+  if (!isPromoProduct.value) return totalQty.value
+  return Math.max(totalQty.value - freeDeductQty.value, 0)
+})
+
+const promoSavedAmount = computed(() => {
+  if (!isPromoProduct.value) return 0
+  return freeDeductQty.value * basePrice.value
 })
 
 const nextGiftNeed = computed(() => {
   if (!isPromoProduct.value) return 0
   const q = totalQty.value
-  if (q <= 0) return 0
-  const mod = q % 10
-  return mod === 0 ? 10 : 10 - mod
+  if (q <= 0) return PROMO_STEP
+  const mod = q % PROMO_STEP
+  return mod === 0 ? PROMO_STEP : PROMO_STEP - mod
 })
 
-/** ✅ 依 promotions.ts 計算「促銷階梯單價」 */
-function calcTierUnitPrice(productId: string, selectedQty: number, fallback: number) {
-  const promo = getPromotionByProductId(productId)
-  if (!promo) return fallback
-
-  const tier = promo.rules.find(r => r.type === 'TIER_PRICING') as any | undefined
-  if (!tier) return fallback
-
-  const step = Number(tier.step ?? 0)
-  const firstPrice = Number(tier.firstPrice ?? fallback)
-  const delta = Number(tier.deltaPerStep ?? 0)
-  const minPrice = tier.minPrice !== undefined ? Number(tier.minPrice) : undefined
-
-  if (!step || selectedQty <= 0) return firstPrice
-
-  // 1~step => level 0；step+1~2step => level 1 ...
-  const level = Math.floor(Math.max(0, selectedQty - 1) / step)
-  let price = firstPrice - level * delta
-  if (minPrice !== undefined) price = Math.max(minPrice, price)
-  return price
-}
+const nextGiftTarget = computed(() => {
+  if (!isPromoProduct.value) return 0
+  return totalQty.value + nextGiftNeed.value
+})
 
 const totalPrice = computed(() => {
   if (!product.value) return 0
@@ -193,11 +264,10 @@ const totalPrice = computed(() => {
   const selectedQty = totalQty.value
   if (selectedQty <= 0) return 0
 
-  // ✅ 促銷商品：用「階梯單價」*「應計價數量」
+  // ✅ 促銷商品：每滿 11 件折 1 件，單價維持 basePrice
   if (isPromoProduct.value) {
-    const unit = calcTierUnitPrice(product.value.id, selectedQty, basePrice.value)
-    const payQty = selectedQty - freeDeductQty.value
-    return payQty * unit
+    const unit = basePrice.value
+    return payableQty.value * unit
   }
 
   // ✅ 一般商品：仍用 basePrice（你目前 spec 沒有 priceDelta，因此先保持）
@@ -220,12 +290,8 @@ function addToCart() {
     }
   }
 
-  const selectedQty = totalQty.value
-
-  // ✅ 單價：促銷商品走階梯單價；一般商品走 basePrice
-  const unit = isPromoProduct.value
-    ? calcTierUnitPrice(product.value.id, selectedQty, basePrice.value)
-    : basePrice.value
+  // ✅ 單價維持商品原價，折抵由每 11 件折 1 件規則處理
+  const unit = basePrice.value
 
   const lines = Object.keys(qtyMap)
     .map(optionId => ({
@@ -245,12 +311,72 @@ function addToCart() {
   router.push('/products')
 }
 
-const previewUrl = ref<string | null>(null)
-function openPreview(url: string) { previewUrl.value = url }
-function closePreview() { previewUrl.value = null }
+const isPreviewOpen = ref(false)
+const previewImageIndex = ref(0)
+const previewCurrentImage = computed(() => {
+  if (galleryImages.value.length === 0) return ''
+  return galleryImages.value[previewImageIndex.value] ?? galleryImages.value[0] ?? ''
+})
+
+function openPreview(index: number) {
+  if (galleryImages.value.length <= 0) return
+  previewImageIndex.value = wrapImageIndex(index)
+  isPreviewOpen.value = true
+}
+
+function openCurrentImagePreview() {
+  openPreview(0)
+}
+function closePreview() { isPreviewOpen.value = false }
+
+function goToPreviewImage(index: number) {
+  if (galleryImages.value.length <= 0) return
+  previewImageIndex.value = wrapImageIndex(index)
+}
+
+function prevPreviewImage() {
+  goToPreviewImage(previewImageIndex.value - 1)
+}
+
+function nextPreviewImage() {
+  goToPreviewImage(previewImageIndex.value + 1)
+}
+
+const previewTouchStartX = ref<number | null>(null)
+const previewTouchStartY = ref<number | null>(null)
+
+function onPreviewTouchStart(e: TouchEvent) {
+  const t = e.touches[0]
+  if (!t) return
+  previewTouchStartX.value = t.clientX
+  previewTouchStartY.value = t.clientY
+}
+
+function onPreviewTouchEnd(e: TouchEvent) {
+  if (!canNavigateImages.value) return
+  const t = e.changedTouches[0]
+  if (!t || previewTouchStartX.value === null || previewTouchStartY.value === null) return
+
+  const dx = t.clientX - previewTouchStartX.value
+  const dy = t.clientY - previewTouchStartY.value
+  previewTouchStartX.value = null
+  previewTouchStartY.value = null
+
+  if (Math.abs(dx) < SWIPE_THRESHOLD_PX) return
+  if (Math.abs(dx) <= Math.abs(dy)) return
+
+  if (dx < 0) nextPreviewImage()
+  else prevPreviewImage()
+}
 
 function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') closePreview()
+  if (e.key === 'Escape' && isPreviewOpen.value) {
+    closePreview()
+    return
+  }
+  if (!isPreviewOpen.value) return
+  if (e.key === 'ArrowLeft') prevPreviewImage()
+  if (e.key === 'ArrowRight') nextPreviewImage()
 }
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
@@ -261,6 +387,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .container { width: 100%; max-width: 980px; margin: 0 auto; box-sizing: border-box; }
 .product-head { display: flex; gap: 14px; align-items: stretch; }
 .media { flex: 0 0 25%; max-width: 25%; display: flex; }
+.media-carousel { position: relative; width: 100%; }
 .media-btn { width: 100%; border: 0; background: transparent; padding: 0; cursor: pointer; text-align: left; }
 .media-btn:disabled { cursor: default; }
 .media-box { width: 100%; aspect-ratio: 1 / 1; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden; display: grid; place-items: center; background: #fff; }
@@ -271,30 +398,198 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .sub { margin-top: 6px; opacity: 0.85; line-height: 1.3; word-break: break-word; overflow-wrap: anywhere; }
 .price { margin-top: 10px; color: #2563eb; font-size: 22px; font-weight: 700; line-height: 1.1; white-space: nowrap; }
 .layout { display: grid; grid-template-columns: 1fr 320px; gap: 20px; margin-top: 16px; }
-.spec-group-title { margin-top: 10px; font-weight: 700; opacity: 0.9; }
-.spec-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 10px; margin-top: 10px; box-sizing: border-box; }
+.h2 { font-size: 17px; font-weight: 800; line-height: 1.25; margin-bottom: 6px; }
+.spec-group-title { margin-top: 12px; font-weight: 700; opacity: 0.9; font-size: 14px; }
+.spec-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 12px; border: 1px solid #e5e7eb; border-radius: 12px; margin-top: 10px; box-sizing: border-box; background: #fff; }
 .spec-row.active { background: #eff6ff; border-color: #2563eb; }
 .spec-info { min-width: 0; }
-.spec-name { font-weight: 700; line-height: 1.2; word-break: break-word; overflow-wrap: anywhere; }
-.spec-sub { margin-top: 4px; opacity: 0.85; line-height: 1.2; word-break: break-word; overflow-wrap: anywhere; }
-.qty { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
-.qty-btn { width: 28px; height: 28px; border-radius: 6px; }
-.qty-num { min-width: 18px; text-align: center; font-weight: 700; }
+.spec-name { font-weight: 700; line-height: 1.25; font-size: 15px; word-break: break-word; overflow-wrap: anywhere; }
+.spec-sub { margin-top: 4px; opacity: 0.85; line-height: 1.2; font-size: 13px; word-break: break-word; overflow-wrap: anywhere; }
+.qty { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.qty-btn { width: 40px; height: 40px; border-radius: 10px; border: 1px solid #d1d5db; background: #fff; font-size: 19px; line-height: 1; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; padding: 0; touch-action: manipulation; }
+.qty-btn:disabled { opacity: 0.5; }
+.qty-num { min-width: 24px; text-align: center; font-weight: 700; font-size: 17px; line-height: 1; }
 .summary .row { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; }
 .summary .total { margin-top: 16px; font-size: 18px; line-height: 1.2; word-break: break-word; overflow-wrap: anywhere; }
-.btn.primary { width: 100%; margin-top: 12px; }
+.btn.primary { width: 100%; margin-top: 12px; min-height: 46px; font-size: 16px; font-weight: 700; border-radius: 12px; touch-action: manipulation; }
 .warn { color: #ef4444; font-size: 13px; margin-top: 10px; line-height: 1.25; word-break: break-word; overflow-wrap: anywhere; }
-.promo { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #e5e7eb; }
-.promo-title { font-weight: 700; }
-.promo-line { margin-top: 6px; opacity: 0.9; line-height: 1.25; }
+.promo {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f8fbff 0%, #eff6ff 100%);
+}
+.promo-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.promo-title { font-weight: 900; color: #1d4ed8; }
+.promo-pill {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 800;
+  color: #4c1d95;
+  background: #ede9fe;
+  border: 1px solid #ddd6fe;
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+.promo-line { margin-top: 8px; line-height: 1.3; color: #1f2937; }
+.promo-rule { font-weight: 700; color: #0f172a; }
+.promo-metrics { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.promo-metric {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  background: #ffffff;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  padding: 6px 10px;
+}
+.promo-k { font-size: 12px; color: #475569; font-weight: 700; }
+.promo-u { font-size: 12px; color: #475569; }
+.promo-metric b { color: #dc2626; font-size: 16px; line-height: 1; }
+.promo-success {
+  color: #166534;
+  background: #ecfdf5;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+.promo-cta {
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-weight: 700;
+}
+.promo-hint {
+  color: #1e3a8a;
+  background: #dbeafe;
+  border: 1px dashed #93c5fd;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+:deep(.topbar .btn) {
+  min-height: 40px;
+  padding: 8px 12px;
+}
+
 @media (max-width: 520px) {
+  .container { padding-left: 10px; padding-right: 10px; }
   .product-head { flex-direction: column; gap: 10px; }
   .media { flex: 0 0 auto; max-width: 100%; }
-  .media-box { aspect-ratio: 16 / 9; }
-  .price { white-space: normal; }
-  .layout { grid-template-columns: 1fr; }
+  .media-carousel,
+  .media-btn { display: block; }
+  .media-box { aspect-ratio: 4 / 3; }
+  .info {
+    flex: 0 0 auto;
+    justify-content: flex-start;
+    margin-top: 4px;
+  }
+  .panel-pad { padding: 12px; }
+  .title { font-size: 22px; line-height: 1.28; }
+  .sub { font-size: 13px; }
+  .price { white-space: normal; font-size: 28px; margin-top: 8px; }
+  .layout { grid-template-columns: 1fr; gap: 12px; }
+  .h2 { font-size: 17px; margin-bottom: 8px; }
+  .spec-group-title { margin-top: 10px; font-size: 14px; }
+  .spec-row { padding: 12px 10px; border-radius: 11px; }
+  .spec-name { font-size: 15px; }
+  .spec-sub { font-size: 13px; }
+  .qty { gap: 7px; }
+  .qty-btn { width: 42px; height: 42px; border-radius: 11px; font-size: 20px; }
+  .qty-num { min-width: 24px; font-size: 18px; }
+  .summary .row { font-size: 14px; }
+  .summary .total { font-size: 20px; margin-top: 14px; }
+  .btn.primary { min-height: 48px; font-size: 16px; }
+  .promo-line { font-size: 13px; line-height: 1.3; }
+  .warn { font-size: 13px; line-height: 1.3; }
+
+  :deep(.topbar-inner) { padding: 10px; }
+  :deep(.topbar .btn) {
+    min-height: 42px;
+    font-size: 14px;
+    padding: 8px 11px;
+    border-radius: 10px;
+  }
 }
 .preview { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); display: grid; place-items: center; padding: 18px; z-index: 9999; }
-.preview-img { max-width: 92vw; max-height: 88vh; object-fit: contain; border-radius: 14px; background: #fff; }
-.preview-close { position: fixed; top: 12px; right: 12px; width: 44px; height: 44px; border-radius: 999px; border: 0; background: rgba(255, 255, 255, 0.95); cursor: pointer; font-size: 28px; line-height: 1; z-index: 10000; }
+.preview-frame { position: relative; max-width: 94vw; max-height: 84vh; display: grid; place-items: center; }
+.preview-img { max-width: 94vw; max-height: 84vh; object-fit: contain; border-radius: 14px; background: #fff; display: block; }
+.preview-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  aspect-ratio: 1 / 1;
+  box-sizing: border-box;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.24);
+  backdrop-filter: blur(10px) saturate(160%);
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 24px;
+  line-height: 1;
+  z-index: 10001;
+}
+.preview-nav {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f172a;
+  font-size: 28px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10000;
+}
+.preview-nav.prev { left: 12px; }
+.preview-nav.next { right: 12px; }
+.preview-dots {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 40px);
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.45);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.preview-dots::-webkit-scrollbar {
+  display: none;
+}
+.preview-dot {
+  width: 8px;
+  height: 8px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.preview-dot.active {
+  width: 18px;
+  background: #fff;
+}
 </style>

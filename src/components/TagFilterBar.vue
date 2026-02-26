@@ -25,7 +25,7 @@
         :key="t.key"
         class="tag"
         :class="{ active: isActive(t.key) }"
-        :style="isActive(t.key) ? activeStyle(t.color) : undefined"
+        :style="{ '--tag-color': t.color }"
         @click="toggle(t.key)"
       >
         <span class="dot" :style="{ background: t.color }"></span>
@@ -77,11 +77,6 @@ function onKeywordInput(e: Event) {
 
 function clearAll() {
   emit('clear')
-}
-
-function activeStyle(color: string) {
-  // 背景填色（接近圖示風格），文字變白
-  return { background: color, color: '#fff' }
 }
 </script>
 

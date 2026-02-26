@@ -24,24 +24,17 @@ function newItemId() {
 }
 
 /**
- * ✅ SP2S 促銷折抵規則：11 件算 10 件（買10送1、買20送2…）
- * - q < 10 => 0
- * - q % 10 === 0 => 0（剛好整10件，不折抵）
- * - 其他 => floor(q/10)
+ * ✅ SP2S 促銷折抵規則：每滿 11 件折 1 件（11 件收 10 件）
  */
 function calcFreeDeductQty_SP2S(selectedQty: number) {
-  if (selectedQty < 10) return 0
-  if (selectedQty % 10 === 0) return 0
-  return Math.floor(selectedQty / 10)
+  if (selectedQty <= 0) return 0
+  return Math.floor(selectedQty / 11)
 }
 
-// ✅ badge/抽屜標題顯示用件數（含贈品）
+// ✅ badge/抽屜標題顯示用件數：顯示使用者實際選擇件數
 export function calcDisplayQty(productId: string, selectedQty: number) {
   if (selectedQty <= 0) return 0
-  if (productId === PROMO_PRODUCT_ID) {
-    const gift = Math.floor(selectedQty / 10)
-    return selectedQty + gift
-  }
+  if (productId === PROMO_PRODUCT_ID) return selectedQty
   return selectedQty
 }
 

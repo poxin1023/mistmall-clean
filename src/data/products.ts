@@ -16,31 +16,148 @@ export type Product = {
   id: string
   name: string
   tag: TagKey
+  tags?: TagKey[]   // 多標籤：篩選時匹配任一即可；無則用 tag
   price: number | null
+  sold_count?: number | null
   image: string
+  images?: string[]
+  imageFit?: 'cover' | 'contain'   // 預設 cover 填滿裁切；contain 完整顯示不裁切
   shortDesc: string
   specs: ProductSpec[]
 }
 
-/**
- * 工具：給「還沒補齊規格」的商品，先塞一個最小可用規格，避免詳情頁爆掉
- * 之後你補資料只要改 specs 內容，不需要再改任何頁面邏輯。
- */
-function placeholderSpecs(): ProductSpec[] {
-  return [
-    {
-      specName: '規格',
-      options: [{ id: 'opt_default', name: '預設規格', stock: 0, priceDelta: 0 }]
-    }
-  ]
+const SOLD_STORE_PREFIX = 'sold_count_v1'
+
+function randInt(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
-export const PRODUCTS: Product[] = [
+function productText(p: Product): string {
+  return [p.name, p.shortDesc, p.tag].filter(Boolean).join(' ')
+}
+
+function isHost(p: Product): boolean {
+  return productText(p).includes('主機')
+}
+
+function isGen1(p: Product): boolean {
+  const t = productText(p)
+  return t.includes('一代') && (t.includes('菸彈') || t.includes('煙彈'))
+}
+
+const SP2S_BUNDLE_ID = 'sp2s_pod_bundle'
+const SP2S_SOLD_BASE = 957
+const MEME_DISPOSABLE_ID = 'meme_disposable_7000'
+const MEME_SOLD_BASE = 627
+const DAILY_INC_MIN = 3
+const DAILY_INC_MAX = 8
+
+function capFor(p: Product): number {
+  if (p.id === SP2S_BUNDLE_ID || p.id === MEME_DISPOSABLE_ID) return 99999
+  return isHost(p) ? 20 : 500
+}
+
+function initialSold(p: Product): number {
+  if (p.id === SP2S_BUNDLE_ID) return SP2S_SOLD_BASE
+  if (p.id === MEME_DISPOSABLE_ID) return MEME_SOLD_BASE
+  if (isHost(p)) return randInt(1, 20)
+  if (isGen1(p)) return randInt(79, 160)
+  return randInt(10, 200)
+}
+
+function getClientScopeKey(): string {
+  if (typeof window === 'undefined') return 'ssr'
+  try {
+    const saved = window.localStorage.getItem('sold_ip_scope')
+    if (saved) return saved
+    const scope = `local_${window.location.hostname}`
+    window.localStorage.setItem('sold_ip_scope', scope)
+    return scope
+  } catch {
+    return 'local_fallback'
+  }
+}
+
+function applyDailyIncrements(products: Product[], counts: Record<string, number>) {
+  // SP2S 買10送1 20送2、MEME 7000：每日固定 +3~8 隨機
+  for (const id of [SP2S_BUNDLE_ID, MEME_DISPOSABLE_ID]) {
+    const p = products.find((x) => x.id === id)
+    if (p) {
+      const current = counts[p.id] ?? initialSold(p)
+      const inc = randInt(DAILY_INC_MIN, DAILY_INC_MAX)
+      counts[p.id] = Math.min(capFor(p), current + inc)
+    }
+  }
+
+  const otherIndices = products
+    .map((_, i) => i)
+    .filter((i) => products[i]?.id !== SP2S_BUNDLE_ID && products[i]?.id !== MEME_DISPOSABLE_ID)
+  const picks = new Set<number>()
+  while (otherIndices.length > 0 && picks.size < Math.min(3, otherIndices.length)) {
+    const idx = otherIndices[randInt(0, otherIndices.length - 1)]
+    if (typeof idx === 'number') picks.add(idx)
+  }
+  for (const idx of picks) {
+    const p = products[idx]
+    if (!p) continue
+    const inc = randInt(3, 15)
+    const current = counts[p.id] ?? initialSold(p)
+    counts[p.id] = Math.min(capFor(p), current + inc)
+  }
+}
+
+function withSoldCount(products: Product[]): Product[] {
+  if (typeof window === 'undefined') {
+    return products.map((p) => ({ ...p, sold_count: initialSold(p) }))
+  }
+
+  const scope = getClientScopeKey()
+  const dataKey = `${SOLD_STORE_PREFIX}:${scope}:data`
+  const dateKey = `${SOLD_STORE_PREFIX}:${scope}:date`
+  const today = new Date().toISOString().slice(0, 10)
+
+  let counts: Record<string, number> = {}
+  try {
+    counts = JSON.parse(window.localStorage.getItem(dataKey) || '{}') as Record<string, number>
+  } catch {
+    counts = {}
+  }
+
+  for (const p of products) {
+    const value = counts[p.id]
+    if (p.id === SP2S_BUNDLE_ID && (typeof value !== 'number' || value < SP2S_SOLD_BASE)) {
+      counts[p.id] = SP2S_SOLD_BASE
+    } else if (typeof value !== 'number' || value <= 0) {
+      counts[p.id] = initialSold(p)
+    } else {
+      counts[p.id] = Math.min(capFor(p), Math.max(1, Math.floor(value)))
+    }
+  }
+
+  const lastUpdate = window.localStorage.getItem(dateKey)
+  if (lastUpdate !== today) {
+    applyDailyIncrements(products, counts)
+    window.localStorage.setItem(dateKey, today)
+  }
+
+  window.localStorage.setItem(dataKey, JSON.stringify(counts))
+  return products.map((p) => ({ ...p, sold_count: counts[p.id] }))
+}
+
+function sortProductsForHome(products: Product[]): Product[] {
+  const firstId = 'meme_disposable_7000'
+  const target = products.find((p) => p.id === firstId)
+  if (!target) return products
+  return [target, ...products.filter((p) => p.id !== firstId)]
+}
+
+const BASE_PRODUCTS: Product[] = [
   // 促銷商品（你原本已完成）
   {
     id: 'sp2s_pod_bundle',
     name: 'SP2S 買10送1 20送2',
     tag: 'pod_v1',
+    tags: ['pod_v1', 'owner_pick'],
     price: 300,
     image: '/products/1 (14).jpg',
     shortDesc: '一代煙彈',
@@ -90,7 +207,7 @@ export const PRODUCTS: Product[] = [
     id: 'ilia_v1_pod',
     name: 'ILIA一代',
     tag: 'pod_v1',
-    price: 260,
+    price: 280,
     image: '/products/1 (2).png',
     shortDesc: '一代煙彈',
     specs: [
@@ -134,7 +251,7 @@ export const PRODUCTS: Product[] = [
     id: 'lana_pod',
     name: 'LANA',
     tag: 'pod_v1',
-    price: 240,
+    price: 250,
     image: '/products/eXQzVJL1QDp2A1Ec4ufH.jpg',
     shortDesc: '一代煙彈',
     specs: [
@@ -514,7 +631,7 @@ export const PRODUCTS: Product[] = [
     id: 'ilia_disposable_6500',
     name: 'ILIA四代拋棄式6500口',
     tag: 'disposable',
-    price: 260,
+    price: 280,
     image: '/products/1 (17).jpg',
     shortDesc: '一次性拋棄式',
     specs: [
@@ -553,7 +670,7 @@ export const PRODUCTS: Product[] = [
     id: 'kis5_disposable_6500',
     name: 'kis5一次性6500口',
     tag: 'disposable',
-    price: 320,
+    price: 300,
     image: '/products/1 (8).jpg',
     shortDesc: '一次性拋棄式',
     specs: [
@@ -581,7 +698,7 @@ export const PRODUCTS: Product[] = [
     id: 'sp2s_disposable_9000',
     name: 'sp2s拋棄式 9000口',
     tag: 'disposable',
-    price: 430,
+    price: 380,
     image: '/products/1 (4).jpg',
     shortDesc: '一次性拋棄式',
     specs: [
@@ -605,10 +722,10 @@ export const PRODUCTS: Product[] = [
   },
   {
     id: 'tut_disposable_6500',
-    name: 'TUT拋棄式6500口，新產品非常好抽~',
+    name: 'TUTX拋棄式6500口，新產品非常好抽~',
     tag: 'disposable',
-    price: 320,
-    image: '/products/1 (8).jpg',
+    price: 310,
+    image: '/products/1 (11).jpg',
     shortDesc: '一次性拋棄式',
     specs: [
       {
@@ -771,7 +888,7 @@ export const PRODUCTS: Product[] = [
     id: 'mohoo_tokyo_box',
     name: '東京魔盒MOHOO',
     tag: 'mohoo',
-    price: 450,
+    price: 400,
     image: '/products/1 (6).jpg',
     shortDesc: '東京魔盒',
     specs: [
@@ -822,6 +939,34 @@ export const PRODUCTS: Product[] = [
           { id: 'mohoo_tokyo_box_o42', name: '（極涼版）NEW! 柳橙綠茶', stock: 1094, priceDelta: 0 },
           { id: 'mohoo_tokyo_box_o43', name: '（極涼版）NEW! 貴妃葡萄', stock: 756, priceDelta: 0 },
           { id: 'mohoo_tokyo_box_o44', name: '（極涼版）NEW! 紅標沙士糖', stock: 1148, priceDelta: 0 }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'tokyo_mohoo_device',
+    name: '東京魔盒主機',
+    tag: 'mohoo',
+    price: 400,
+    image: '/products/22222.jpg',
+    images: ['/products/22222.jpg', '/products/222222.jpg', '/products/2222222.jpg'],
+    shortDesc: '東京魔盒主機',
+    specs: [
+      {
+        specName: '顏色',
+        options: [
+          { id: 'tokyo_mohoo_device_o01', name: '冰川灣藍', stock: 58, priceDelta: 0 },
+          { id: 'tokyo_mohoo_device_o02', name: '夕陽漸紅', stock: 72, priceDelta: 0 },
+          { id: 'tokyo_mohoo_device_o03', name: '嫣嫣豔紅', stock: 49, priceDelta: 0 },
+          { id: 'tokyo_mohoo_device_o04', name: '岩石蒼綠', stock: 95, priceDelta: 0 },
+          { id: 'tokyo_mohoo_device_o05', name: '深邃夜黑', stock: 64, priceDelta: 0 },
+          { id: 'tokyo_mohoo_device_o06', name: '淺茶微棕', stock: 87, priceDelta: 0 },
+          { id: 'tokyo_mohoo_device_o07', name: '漸變紅綠', stock: 43, priceDelta: 0 },
+          { id: 'tokyo_mohoo_device_o08', name: '灰石古藍', stock: 78, priceDelta: 0 },
+          { id: 'tokyo_mohoo_device_o09', name: '王者紫晶', stock: 56, priceDelta: 0 },
+          { id: 'tokyo_mohoo_device_o10', name: '瑞雪皓白', stock: 91, priceDelta: 0 },
+          { id: 'tokyo_mohoo_device_o11', name: '碧波輕藍', stock: 69, priceDelta: 0 },
+          { id: 'tokyo_mohoo_device_o12', name: '紫羅蘭霧', stock: 97, priceDelta: 0 }
         ]
       }
     ]
@@ -919,4 +1064,415 @@ export const PRODUCTS: Product[] = [
     }
   ]
 }
+,
+{
+  id: 'meme_disposable_7000',
+  name: '韓國MEME拋棄式 7000口',
+  tag: 'owner_pick',
+  price: 320,
+  image: '/products/meme (2).jpg',
+  images: [
+    '/products/meme (2).jpg',
+    '/products/meme1 (1).jpg',
+    '/products/meme1 (2).jpg',
+    '/products/meme1 (3).jpg',
+    '/products/meme1 (4).jpg',
+    '/products/meme1 (5).jpg',
+    '/products/meme1 (6).jpg',
+    '/products/meme1 (7).jpg',
+    '/products/meme1 (8).jpg',
+    '/products/meme1 (9).jpg',
+    '/products/meme1 (10).jpg',
+    '/products/meme1 (11).jpg',
+    '/products/meme1 (12).jpg',
+    '/products/meme1 (13).jpg',
+    '/products/meme1 (14).jpg',
+    '/products/meme1 (15).jpg',
+    '/products/meme1 (16).jpg',
+    '/products/meme1 (17).jpg',
+    '/products/meme1 (18).jpg',
+    '/products/meme1 (19).jpg',
+    '/products/meme1 (20).jpg',
+    '/products/meme1 (21).jpg',
+    '/products/meme1 (22).jpg',
+    '/products/meme1 (23).jpg',
+    '/products/meme1 (24).jpg',
+    '/products/meme1 (25).jpg'
+  ],
+  shortDesc: '一次性拋棄式',
+  specs: [
+    {
+      specName: '口味',
+      options: [
+        { id: 'meme_disposable_7000_o01', name: '可樂', stock: 613, priceDelta: 0 },
+        { id: 'meme_disposable_7000_o02', name: '芭樂', stock: 427, priceDelta: 0 },
+        { id: 'meme_disposable_7000_o03', name: '草莓', stock: 759, priceDelta: 0 },
+        { id: 'meme_disposable_7000_o04', name: '薄荷', stock: 355, priceDelta: 0 },
+        { id: 'meme_disposable_7000_o05', name: '西瓜', stock: 694, priceDelta: 0 },
+        { id: 'meme_disposable_7000_o06', name: '葡萄', stock: 286, priceDelta: 0 },
+        { id: 'meme_disposable_7000_o07', name: '藍莓', stock: 541, priceDelta: 0 },
+        { id: 'meme_disposable_7000_o08', name: '綠豆沙', stock: 772, priceDelta: 0 },
+        { id: 'meme_disposable_7000_o09', name: '百香果', stock: 318, priceDelta: 0 },
+        { id: 'meme_disposable_7000_o10', name: '哈密瓜', stock: 668, priceDelta: 0 },
+        { id: 'meme_disposable_7000_o11', name: '鐵觀音', stock: 491, priceDelta: 0 },
+        { id: 'meme_disposable_7000_o12', name: '北極冰', stock: 739, priceDelta: 0 },
+        { id: 'meme_disposable_7000_o13', name: '1新款(鮮莓果)', stock: 244, priceDelta: 0 },
+        { id: 'meme_disposable_7000_o14', name: '2新款(蜜桃烏龍)', stock: 578, priceDelta: 0 },
+        { id: 'meme_disposable_7000_o15', name: '3新款(白荔枝)', stock: 127, priceDelta: 0 },
+        { id: 'meme_disposable_7000_o16', name: '4新款(茉莉花茶)', stock: 783, priceDelta: 0 }
+      ]
+    }
+  ]
+}
+,
+{
+  id: 'sp2s_max_hinex_replaceable_device',
+  name: 'SP2S MAX HINEX換彈式主機',
+  tag: 'replaceable_device',
+  price: 620,
+  image: '/products/SP2s Max hine X.jpg',
+  images: [
+    '/products/SP2s Max hine X.jpg',
+    '/products/SP2s Max hine 2X.jpg'
+  ],
+  shortDesc: '換彈式主機',
+  specs: [
+    {
+      specName: '顏色',
+      options: [
+        { id: 'sp2s_max_hinex_replaceable_device_o01', name: '粉色', stock: 734, priceDelta: 0 },
+        { id: 'sp2s_max_hinex_replaceable_device_o02', name: '白橙色', stock: 581, priceDelta: 0 },
+        { id: 'sp2s_max_hinex_replaceable_device_o03', name: '紫色', stock: 409, priceDelta: 0 },
+        { id: 'sp2s_max_hinex_replaceable_device_o04', name: '綠黑色', stock: 662, priceDelta: 0 },
+        { id: 'sp2s_max_hinex_replaceable_device_o05', name: '黃黑色', stock: 517, priceDelta: 0 },
+        { id: 'sp2s_max_hinex_replaceable_device_o06', name: '藍黑色', stock: 783, priceDelta: 0 },
+        { id: 'sp2s_max_hinex_replaceable_device_o07', name: '紅黑色', stock: 458, priceDelta: 0 },
+        { id: 'sp2s_max_hinex_replaceable_device_o08', name: '黑色', stock: 625, priceDelta: 0 }
+      ]
+    }
+  ]
+}
+,
+{
+  id: 'sp2s_maxhinex_pod',
+  name: 'SP2S MaXhineX霧化煙彈',
+  tag: 'replaceable_device',
+  price: 420,
+  image: '/products/SP203.jpg',
+  images: [
+    '/products/SP203.jpg',
+    '/products/SP2S MaXhineX1.jpg',
+    '/products/SP2S MaXhineX2.jpg',
+    '/products/SP2S MaXhineX3.jpg',
+    '/products/SP2S MaXhineX4.jpg',
+    '/products/SP2S MaXhineX5.jpg'
+  ],
+  shortDesc: '換彈式煙彈',
+  specs: [
+    {
+      specName: '口味',
+      options: [
+        { id: 'sp2s_maxhinex_pod_o01', name: '百香果', stock: 264, priceDelta: 0 },
+        { id: 'sp2s_maxhinex_pod_o02', name: '檸檬青檸', stock: 279, priceDelta: 0 },
+        { id: 'sp2s_maxhinex_pod_o03', name: '奇異百香果芭樂', stock: 293, priceDelta: 0 },
+        { id: 'sp2s_maxhinex_pod_o04', name: '桃子', stock: 308, priceDelta: 0 },
+        { id: 'sp2s_maxhinex_pod_o05', name: '蜜瓜軟糖', stock: 322, priceDelta: 0 },
+        { id: 'sp2s_maxhinex_pod_o06', name: '玫瑰荔枝', stock: 337, priceDelta: 0 },
+        { id: 'sp2s_maxhinex_pod_o07', name: '葡萄', stock: 351, priceDelta: 0 },
+        { id: 'sp2s_maxhinex_pod_o08', name: '清爽薄荷', stock: 366, priceDelta: 0 },
+        { id: 'sp2s_maxhinex_pod_o09', name: '西湖龍井', stock: 380, priceDelta: 0 },
+        { id: 'sp2s_maxhinex_pod_o10', name: '紅番石榴', stock: 395, priceDelta: 0 },
+        { id: 'sp2s_maxhinex_pod_o11', name: '冰紅茶', stock: 409, priceDelta: 0 },
+        { id: 'sp2s_maxhinex_pod_o12', name: '西瓜', stock: 424, priceDelta: 0 },
+        { id: 'sp2s_maxhinex_pod_o13', name: '鐵觀音', stock: 438, priceDelta: 0 },
+        { id: 'sp2s_maxhinex_pod_o14', name: '茉莉花茶', stock: 453, priceDelta: 0 },
+        { id: 'sp2s_maxhinex_pod_o15', name: '荔枝薄荷', stock: 467, priceDelta: 0 },
+        { id: 'sp2s_maxhinex_pod_o16', name: '南極冰', stock: 489, priceDelta: 0 }
+      ]
+    }
+  ]
+},
+
+  // RELX悅刻
+  {
+    id: 'relx_greator_pod',
+    name: 'RELX悅刻電子煙積木(買口味送主機)',
+    tag: 'replaceable_device',
+    price: 400,
+    image: '/products/2026226.jpg',
+    images: ['/products/2026226.jpg', '/products/20262261.jpg', '/products/20262262.jpg', '/products/20262263.jpg', '/products/20262264.jpg'],
+    shortDesc: '換彈式主機',
+    specs: [
+      {
+        specName: '口味',
+        options: [
+          { id: 'relx_greator_pod_o01', name: '草莓', stock: 214, priceDelta: 0 },
+          { id: 'relx_greator_pod_o02', name: '薄荷', stock: 189, priceDelta: 0 },
+          { id: 'relx_greator_pod_o03', name: '可樂', stock: 176, priceDelta: 0 },
+          { id: 'relx_greator_pod_o04', name: '葡萄', stock: 223, priceDelta: 0 },
+          { id: 'relx_greator_pod_o05', name: '焦糖咖啡', stock: 158, priceDelta: 0 },
+          { id: 'relx_greator_pod_o06', name: '西瓜', stock: 201, priceDelta: 0 },
+          { id: 'relx_greator_pod_o07', name: '番石榴', stock: 167, priceDelta: 0 },
+          { id: 'relx_greator_pod_o08', name: '百香果', stock: 232, priceDelta: 0 },
+          { id: 'relx_greator_pod_o09', name: '椰子水', stock: 195, priceDelta: 0 },
+          { id: 'relx_greator_pod_o10', name: '荔枝', stock: 181, priceDelta: 0 },
+          { id: 'relx_greator_pod_o11', name: '三重芒果', stock: 209, priceDelta: 0 },
+          { id: 'relx_greator_pod_o12', name: '桃子', stock: 174, priceDelta: 0 },
+          { id: 'relx_greator_pod_o13', name: '菠蘿椰子水', stock: 219, priceDelta: 0 },
+          { id: 'relx_greator_pod_o14', name: '混合莓果', stock: 203, priceDelta: 0 },
+          { id: 'relx_greator_pod_o15', name: '海鹽檸檬', stock: 166, priceDelta: 0 },
+          { id: 'relx_greator_pod_o16', name: '抹茶星冰樂', stock: 152, priceDelta: 0 },
+          { id: 'relx_greator_pod_o17', name: '水蜜桃草莓', stock: 225, priceDelta: 0 },
+          { id: 'relx_greator_pod_o18', name: '買三口味送一台主機', stock: 0, priceDelta: 0 }
+        ]
+      }
+    ]
+  },
+
+  // MEHA魅嗨
+  {
+    id: 'meha_device_v1',
+    name: 'MEHA魅嗨',
+    tag: 'device_v1',
+    price: 400,
+    image: '/products/MEHA.jpg',
+    images: ['/products/MEHA.jpg', '/products/MEHA1.jpg', '/products/MEHA2.jpg'],
+    shortDesc: '一代主機',
+    specs: [
+      {
+        specName: '顏色',
+        options: [
+          { id: 'meha_device_v1_o01', name: '幻影紫', stock: 186, priceDelta: 0 },
+          { id: 'meha_device_v1_o02', name: '幻影黃', stock: 173, priceDelta: 0 },
+          { id: 'meha_device_v1_o03', name: '星耀綠', stock: 214, priceDelta: 0 },
+          { id: 'meha_device_v1_o04', name: '星耀藍', stock: 159, priceDelta: 0 },
+          { id: 'meha_device_v1_o05', name: '星耀黑', stock: 227, priceDelta: 0 },
+          { id: 'meha_device_v1_o06', name: '珊瑚紅', stock: 132, priceDelta: 0 },
+          { id: 'meha_device_v1_o07', name: '鎏金灰', stock: 198, priceDelta: 0 },
+          { id: 'meha_device_v1_o08', name: '隕石灰', stock: 205, priceDelta: 0 }
+        ]
+      }
+    ]
+  },
+
+  // ILIA哩亞8000鴨嘴獸
+  {
+    id: 'ilia_8000_disposable',
+    name: 'ILIA哩亞8000鴨嘴獸 拋棄式',
+    tag: 'disposable',
+    price: 320,
+    image: '/products/ILIA68000.jpg',
+    images: ['/products/ILIA68000.jpg'],
+    shortDesc: '一次性拋棄式',
+    specs: [
+      {
+        specName: '口味',
+        options: [
+          { id: 'ilia_8000_disposable_o01', name: '葡萄', stock: 214, priceDelta: 0 },
+          { id: 'ilia_8000_disposable_o02', name: '薄荷', stock: 198, priceDelta: 0 },
+          { id: 'ilia_8000_disposable_o03', name: '可樂', stock: 176, priceDelta: 0 },
+          { id: 'ilia_8000_disposable_o04', name: '青蘋果', stock: 223, priceDelta: 0 },
+          { id: 'ilia_8000_disposable_o05', name: '荔草', stock: 159, priceDelta: 0 },
+          { id: 'ilia_8000_disposable_o06', name: '鳳梨', stock: 205, priceDelta: 0 },
+          { id: 'ilia_8000_disposable_o07', name: '荔枝', stock: 187, priceDelta: 0 },
+          { id: 'ilia_8000_disposable_o08', name: '芒樂', stock: 168, priceDelta: 0 },
+          { id: 'ilia_8000_disposable_o09', name: '芒果', stock: 231, priceDelta: 0 },
+          { id: 'ilia_8000_disposable_o10', name: '藍莓', stock: 212, priceDelta: 0 },
+          { id: 'ilia_8000_disposable_o11', name: '哈密瓜', stock: 174, priceDelta: 0 },
+          { id: 'ilia_8000_disposable_o12', name: '綠豆', stock: 153, priceDelta: 0 },
+          { id: 'ilia_8000_disposable_o13', name: '西瓜', stock: 226, priceDelta: 0 },
+          { id: 'ilia_8000_disposable_o14', name: '鐵觀音', stock: 190, priceDelta: 0 },
+          { id: 'ilia_8000_disposable_o15', name: '南極冰', stock: 167, priceDelta: 0 },
+          { id: 'ilia_8000_disposable_o16', name: '百香果', stock: 219, priceDelta: 0 },
+          { id: 'ilia_8000_disposable_o17', name: '元氣蜜桃', stock: 182, priceDelta: 0 },
+          { id: 'ilia_8000_disposable_o18', name: '老冰棍', stock: 161, priceDelta: 0 },
+          { id: 'ilia_8000_disposable_o19', name: '森林莓果', stock: 207, priceDelta: 0 }
+        ]
+      }
+    ]
+  },
+
+  // XIAOKE梟客7500口
+  {
+    id: 'xiaoke_7500_disposable',
+    name: 'XIAOKE梟客7500口',
+    tag: 'disposable',
+    price: 340,
+    image: '/products/XIAOKE7500.jpg',
+    images: ['/products/XIAOKE7500.jpg', '/products/1XIAOKE7500.jpg'],
+    shortDesc: '一次性拋棄式',
+    specs: [
+      {
+        specName: '口味',
+        options: [
+          { id: 'xiaoke_7500_disposable_o01', name: '冰泉', stock: 198, priceDelta: 0 },
+          { id: 'xiaoke_7500_disposable_o02', name: '冰爽西瓜', stock: 214, priceDelta: 0 },
+          { id: 'xiaoke_7500_disposable_o03', name: '可樂', stock: 176, priceDelta: 0 },
+          { id: 'xiaoke_7500_disposable_o04', name: '哈密瓜', stock: 223, priceDelta: 0 },
+          { id: 'xiaoke_7500_disposable_o05', name: '手打檸檬茶', stock: 159, priceDelta: 0 },
+          { id: 'xiaoke_7500_disposable_o06', name: '森森莓果', stock: 205, priceDelta: 0 },
+          { id: 'xiaoke_7500_disposable_o07', name: '水蜜桃', stock: 187, priceDelta: 0 },
+          { id: 'xiaoke_7500_disposable_o08', name: '百香果', stock: 168, priceDelta: 0 },
+          { id: 'xiaoke_7500_disposable_o09', name: '紅心芭樂', stock: 231, priceDelta: 0 },
+          { id: 'xiaoke_7500_disposable_o10', name: '綠豆', stock: 212, priceDelta: 0 },
+          { id: 'xiaoke_7500_disposable_o11', name: '老冰棍', stock: 174, priceDelta: 0 },
+          { id: 'xiaoke_7500_disposable_o12', name: '茉莉花葡萄', stock: 153, priceDelta: 0 },
+          { id: 'xiaoke_7500_disposable_o13', name: '荔枝', stock: 226, priceDelta: 0 },
+          { id: 'xiaoke_7500_disposable_o14', name: '薄荷', stock: 190, priceDelta: 0 },
+          { id: 'xiaoke_7500_disposable_o15', name: '鐵觀音', stock: 167, priceDelta: 0 },
+          { id: 'xiaoke_7500_disposable_o16', name: '雪碧', stock: 219, priceDelta: 0 },
+          { id: 'xiaoke_7500_disposable_o17', name: '青芒果', stock: 182, priceDelta: 0 },
+          { id: 'xiaoke_7500_disposable_o18', name: '青蘋果', stock: 161, priceDelta: 0 },
+          { id: 'xiaoke_7500_disposable_o19', name: '香水鳳梨', stock: 207, priceDelta: 0 },
+          { id: 'xiaoke_7500_disposable_o20', name: '黑加侖藍莓', stock: 221, priceDelta: 0 }
+        ]
+      }
+    ]
+  },
+
+  // MEHA魅嗨一代通用
+  {
+    id: 'meha_pod_v1',
+    name: 'MEHA魅嗨一代通用',
+    tag: 'pod_v1',
+    price: 300,
+    image: '/products/MEHA11.jpg',
+    images: ['/products/MEHA11.jpg', '/products/MEHA111.jpg'],
+    shortDesc: '一代煙彈',
+    specs: [
+      {
+        specName: '口味',
+        options: [
+          { id: 'meha_pod_v1_o01', name: '可樂冰', stock: 214, priceDelta: 0 },
+          { id: 'meha_pod_v1_o02', name: '百香果', stock: 198, priceDelta: 0 },
+          { id: 'meha_pod_v1_o03', name: '經典煙草', stock: 176, priceDelta: 0 },
+          { id: 'meha_pod_v1_o04', name: '鐵觀音', stock: 223, priceDelta: 0 },
+          { id: 'meha_pod_v1_o05', name: '元氣草莓', stock: 159, priceDelta: 0 },
+          { id: 'meha_pod_v1_o06', name: '冰鎮西瓜', stock: 205, priceDelta: 0 },
+          { id: 'meha_pod_v1_o07', name: '勁爽沙士', stock: 187, priceDelta: 0 },
+          { id: 'meha_pod_v1_o08', name: '勁爽薄荷', stock: 168, priceDelta: 0 },
+          { id: 'meha_pod_v1_o09', name: '拉菲冰', stock: 231, priceDelta: 0 },
+          { id: 'meha_pod_v1_o10', name: '檸檬草', stock: 212, priceDelta: 0 },
+          { id: 'meha_pod_v1_o11', name: '海鹽檸檬', stock: 174, priceDelta: 0 },
+          { id: 'meha_pod_v1_o12', name: '清爽葡萄', stock: 153, priceDelta: 0 },
+          { id: 'meha_pod_v1_o13', name: '玫香荔枝', stock: 226, priceDelta: 0 },
+          { id: 'meha_pod_v1_o14', name: '粉紅蜜桃', stock: 190, priceDelta: 0 },
+          { id: 'meha_pod_v1_o15', name: '紅冰芭樂', stock: 167, priceDelta: 0 },
+          { id: 'meha_pod_v1_o16', name: '綠豆冰沙', stock: 219, priceDelta: 0 },
+          { id: 'meha_pod_v1_o17', name: '藍莓爆珠', stock: 182, priceDelta: 0 },
+          { id: 'meha_pod_v1_o18', name: '蘋果汽水', stock: 161, priceDelta: 0 },
+          { id: 'meha_pod_v1_o19', name: '蜜瓜冰', stock: 207, priceDelta: 0 },
+          { id: 'meha_pod_v1_o20', name: '蜜香豆奶', stock: 221, priceDelta: 0 },
+          { id: 'meha_pod_v1_o21', name: '靈魂冰泉', stock: 186, priceDelta: 0 },
+          { id: 'meha_pod_v1_o22', name: '風味老冰棍', stock: 172, priceDelta: 0 },
+          { id: 'meha_pod_v1_o23', name: '香醇咖啡', stock: 199, priceDelta: 0 },
+          { id: 'meha_pod_v1_o24', name: '鮮甜芒果', stock: 215, priceDelta: 0 },
+          { id: 'meha_pod_v1_o25', name: '黃金波蘿', stock: 204, priceDelta: 0 }
+        ]
+      }
+    ]
+  },
+
+  // MEHA 魅嗨五代
+  {
+    id: 'meha_v5_pod',
+    name: 'MEHA 魅嗨五代',
+    tag: 'ilia_v5',
+    price: 320,
+    image: '/products/MEHA553.JPG',
+    images: ['/products/MEHA553.JPG', '/products/MEHA555.JPG', '/products/MEHA5551.JPG', '/products/MEHA5555.JPG', '/products/MEHA5556.JPG', '/products/MEHA55445.JPG', '/products/MEHA55545.JPG', '/products/MEHA55555.JPG', '/products/MEHA553555.JPG', '/products/MEHA555555.JPG'],
+    shortDesc: '五代哩亞',
+    specs: [
+      {
+        specName: '口味',
+        options: [
+          { id: 'meha_v5_pod_o01', name: '冰心蜜桃', stock: 214, priceDelta: 0 },
+          { id: 'meha_v5_pod_o02', name: '百香果汁', stock: 198, priceDelta: 0 },
+          { id: 'meha_v5_pod_o03', name: '芒果冰沙', stock: 176, priceDelta: 0 },
+          { id: 'meha_v5_pod_o04', name: '冰鎮西瓜', stock: 223, priceDelta: 0 },
+          { id: 'meha_v5_pod_o05', name: '粉紅檸檬', stock: 159, priceDelta: 0 },
+          { id: 'meha_v5_pod_o06', name: '荔枝甘露', stock: 205, priceDelta: 0 },
+          { id: 'meha_v5_pod_o07', name: '古巴雪茄', stock: 187, priceDelta: 0 },
+          { id: 'meha_v5_pod_o08', name: '紅冰芭樂', stock: 168, priceDelta: 0 },
+          { id: 'meha_v5_pod_o09', name: '蜜桃烏龍', stock: 231, priceDelta: 0 },
+          { id: 'meha_v5_pod_o10', name: '多肉葡萄', stock: 212, priceDelta: 0 },
+          { id: 'meha_v5_pod_o11', name: '經典菸草', stock: 174, priceDelta: 0 },
+          { id: 'meha_v5_pod_o12', name: '酸梅湯', stock: 153, priceDelta: 0 },
+          { id: 'meha_v5_pod_o13', name: '洛神花茶', stock: 226, priceDelta: 0 },
+          { id: 'meha_v5_pod_o14', name: '經典薄荷', stock: 190, priceDelta: 0 },
+          { id: 'meha_v5_pod_o15', name: '鐵觀音', stock: 167, priceDelta: 0 },
+          { id: 'meha_v5_pod_o16', name: '零度可樂', stock: 219, priceDelta: 0 }
+        ]
+      }
+    ]
+  },
+
+  // 研磨器420專家
+  {
+    id: 'aluminum_grinder_420',
+    name: '🇺🇸Sharpstone - 63mm 鋁合金金屬研磨器(美國製)',
+    tag: 'grinder_420',
+    price: 1580,
+    image: '/products/800x.jpg',
+    images: ['/products/800x.jpg', '/products/8001x.jpg'],
+    shortDesc: '研磨器420專家',
+    specs: [
+      {
+        specName: '顏色',
+        options: [
+          { id: 'aluminum_grinder_420_o01', name: '黑色', stock: 86, priceDelta: 0 }
+        ]
+      }
+    ]
+  },
+
+  // 420電子秤
+  {
+    id: 'gauge_scale_420',
+    name: '420電子秤 Gauge Scale',
+    tag: 'grinder_420',
+    price: 420,
+    image: '/products/1236001g (1).png',
+    imageFit: 'contain',
+    images: ['/products/1236001g (2).png', '/products/1236001g (1).png'],
+    shortDesc: '研磨器420專家',
+    specs: [
+      {
+        specName: '規格',
+        options: [
+          { id: 'gauge_scale_420_o01', name: '10', stock: 0, priceDelta: 0 }
+        ]
+      }
+    ]
+  },
+
+  // USB充電式電烙筆
+  {
+    id: 'usb_herb_tool_500',
+    name: 'USB充電式 省草神器 ',
+    tag: 'grinder_420',
+    price: 500,
+    image: '/products/THC1.jpg',
+    images: ['/products/THC1.jpg', '/products/THC.jpg'],
+    shortDesc: '研磨器420專家',
+    specs: [
+      {
+        specName: '顏色',
+        options: [
+          { id: 'usb_herb_tool_500_o01', name: '紅色', stock: 7, priceDelta: 0 },
+          { id: 'usb_herb_tool_500_o02', name: '金色', stock: 3, priceDelta: 0 },
+          { id: 'usb_herb_tool_500_o03', name: '藍色', stock: 9, priceDelta: 0 },
+          { id: 'usb_herb_tool_500_o04', name: '綠色', stock: 5, priceDelta: 0 },
+          { id: 'usb_herb_tool_500_o05', name: '黑色', stock: 8, priceDelta: 0 },
+          { id: 'usb_herb_tool_500_o06', name: '粉色', stock: 4, priceDelta: 0 },
+          { id: 'usb_herb_tool_500_o07', name: '白色', stock: 6, priceDelta: 0 },
+          { id: 'usb_herb_tool_500_o08', name: '彩虹色（漸變）', stock: 2, priceDelta: 0 },
+          { id: 'usb_herb_tool_500_o09', name: '3台灣版本', stock: 0, priceDelta: 0 },
+          { id: 'usb_herb_tool_500_o10', name: '45加拿大版本', stock: 0, priceDelta: 0 }
+        ]
+      }
+    ]
+  }
 ]
+
+export const PRODUCTS: Product[] = withSoldCount(sortProductsForHome(BASE_PRODUCTS))

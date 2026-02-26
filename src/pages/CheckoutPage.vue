@@ -151,8 +151,8 @@
           <button class="ghost" type="button" @click="open711Map">📍 7-11 地圖選擇</button>
         </div>
 
-        <button class="submit" type="button" :disabled="cart.items.length === 0" @click="submitOrder">
-          提交訂單
+        <button class="submit" type="button" :disabled="cart.items.length === 0 || submitting" @click="submitOrder">
+          {{ submitting ? '提交中…' : '提交訂單' }}
         </button>
 
         <div v-if="errorMsg" class="err">{{ errorMsg }}</div>
@@ -377,8 +377,19 @@ function validPhoneTw(v: string) {
   return /^09\d{8}$/.test(v)
 }
 
-/** ✅ 這裡是你要的：提交後產生訂單號 + 導到成功頁 */
-function submitOrder() {
+const submitting = ref(false)
+
+/** 產生 UUID v4 供 Idempotency-Key 使用 */
+function uuidv4(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0
+    const v = c === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
+}
+
+/** 提交訂單：呼叫 API 寫入 D1，成功後導到成功頁 */
+async function submitOrder() {
   errorMsg.value = ''
 
   if (cart.items.length === 0) {
@@ -398,78 +409,116 @@ function submitOrder() {
     return
   }
 
-  // ✅ 產生訂單號：ORD + YYYYMMDDHHmmss
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  const ss = String(d.getSeconds()).padStart(2, '0')
-  const orderNo = `ORD${y}${m}${day}${hh}${mm}${ss}`
-  const createdAt = `${y}/${m}/${day} ${hh}:${mm}`
-
-  // ✅ 把購物車商品整理成成功頁要用的 items
-  const items = cart.items.map(it => {
-    // 這筆商品的總數量（依 lines 加總）
-    const qty = it.lines.reduce((a, l) => a + l.qty, 0)
-
-    // 單價：用加權平均（避免不同規格不同價時顯示錯）
-    const subtotalRaw = itemAmount(it) // ✅ 你此檔案已經有 itemAmount()
-    const unitPrice = qty > 0 ? Math.round(subtotalRaw / qty) : 0
-
-    // 規格文字（例如：葡萄 x2）
-    const specs = it.lines.map(l => `${l.name} ×${l.qty}`)
-
-    return {
-      productName: it.productName,
-      qty,
-      unitPrice,
-      subtotal: subtotalRaw,
-      specs
-    }
-  })
-
-  // ✅ 成功頁會讀 sessionStorage.last_order
-  const payload = {
-    orderNo,
-    createdAt,
-    total: grandTotal.value,
-    name: form.name,
-    phone: form.phone,
-    storeNo: form.store.no,
-    storeName: form.store.name,
-    storeAddress: form.store.address,
-    items // ✅ 關鍵：把商品一起存進去
-  }
-
-  sessionStorage.setItem('last_order', JSON.stringify(payload))
-  
-// ✅ 把訂單存進 localStorage，提供「訂單查詢頁」使用
-const raw = localStorage.getItem('orders_v1')
-let arr: any[] = []
-
-if (raw) {
+  submitting.value = true
   try {
-    arr = JSON.parse(raw)
-  } catch {
-    arr = []
+    // 組裝 API 所需 items（含運費行）
+    const apiItems = cart.items.map(it => {
+      const qty = it.lines.reduce((a, l) => a + l.qty, 0)
+      const subtotalRaw = itemAmount(it)
+      const unitPrice = qty > 0 ? Math.round(subtotalRaw / qty) : 0
+      const specs = it.lines.map(l => `${l.name} ×${l.qty}`)
+      return {
+        productName: it.productName,
+        specs,
+        qty,
+        unitPrice,
+        subtotal: subtotalRaw
+      }
+    })
+
+    if (shippingFee.value > 0) {
+      apiItems.push({
+        productName: '運費',
+        specs: [] as string[],
+        qty: 1,
+        unitPrice: shippingFee.value,
+        subtotal: shippingFee.value
+      })
+    }
+
+    const body = {
+      name: form.name,
+      phone: form.phone,
+      storeNo: form.store!.no,
+      storeName: form.store!.name,
+      storeAddress: form.store!.address,
+      amount: grandTotal.value,
+      items: apiItems,
+      turnstileToken: '' // 本地 DEV_BYPASS_TURNSTILE 可略過
+    }
+
+    const res = await fetch('/api/orders', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': uuidv4()
+      },
+      body: JSON.stringify(body)
+    })
+
+    let data: { ok?: boolean; orderNo?: string; error?: string }
+    try {
+      const text = await res.text()
+      data = text ? (JSON.parse(text) as { ok?: boolean; orderNo?: string; error?: string }) : {}
+    } catch {
+      data = { error: '無法解析伺服器回應' }
+    }
+    if (!res.ok || !data.ok || !data.orderNo) {
+      errorMsg.value = data.error ?? `提交失敗 (${res.status})`
+      return
+    }
+
+    const orderNo = data.orderNo
+    const d = new Date()
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    const hh = String(d.getHours()).padStart(2, '0')
+    const mm = String(d.getMinutes()).padStart(2, '0')
+    const createdAt = `${y}/${m}/${day} ${hh}:${mm}`
+
+    const displayItems = cart.items.map(it => {
+      const qty = it.lines.reduce((a, l) => a + l.qty, 0)
+      const subtotalRaw = itemAmount(it)
+      const unitPrice = qty > 0 ? Math.round(subtotalRaw / qty) : 0
+      const specs = it.lines.map(l => `${l.name} ×${l.qty}`)
+      return { productName: it.productName, qty, unitPrice, subtotal: subtotalRaw, specs }
+    })
+
+    const payload = {
+      orderNo,
+      createdAt,
+      total: grandTotal.value,
+      name: form.name,
+      phone: form.phone,
+      storeNo: form.store!.no,
+      storeName: form.store!.name,
+      storeAddress: form.store!.address,
+      items: displayItems
+    }
+
+    sessionStorage.setItem('last_order', JSON.stringify(payload))
+
+    const raw = localStorage.getItem('orders_v1')
+    let arr: Record<string, unknown>[] = []
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw)
+        arr = Array.isArray(parsed) ? parsed : []
+      } catch {
+        arr = []
+      }
+    }
+    arr.push({ ...payload, status: '待確認' })
+    localStorage.setItem('orders_v1', JSON.stringify(arr))
+
+    cart.clear()
+    router.push('/order-success')
+  } catch (e) {
+    errorMsg.value = e instanceof Error ? e.message : '網路錯誤，請稍後再試'
+  } finally {
+    submitting.value = false
   }
-  if (!Array.isArray(arr)) arr = []
-}
-
-arr.push({
-  ...payload,
-  status: '待確認'
-})
-
-localStorage.setItem('orders_v1', JSON.stringify(arr))
-
-  // ✅ 清空購物車（示範流程）
-  cart.clear()
-
-  // ✅ 導到成功頁
-  router.push('/order-success')
 }
 
 

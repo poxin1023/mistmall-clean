@@ -23,23 +23,16 @@ export type ProductPromotion = {
 /**
  * 只把「特定商品」放在這裡，其他商品不寫，就完全不套用活動。
  *
- * 你 products.ts 圖中「買10送1」商品 id = sp2s_pod_bundle
- * 名稱：SP2S 買10送1 20送2
+ * 你 products.ts 促銷商品 id = sp2s_pod_bundle
+ * 規則：每滿 11 件折 1 件（11 件收 10 件）
  */
 export const PROMOTIONS: ProductPromotion[] = [
   {
     productId: 'sp2s_pod_bundle',
-    title: '買10送1（20送2）+ 階梯單價',
+    title: '每滿11件折1件（11件收10件）',
     rules: [
-      // 買10送1
-      { type: 'BUY_X_GET_Y', buy: 10, free: 1 },
-
-      // 階梯單價：
-      // 1~9 => 300
-      // 10~19 => 272（300 - 28）
-      // 20~29 => 244（272 - 28）
-      // 以此類推
-      { type: 'TIER_PRICING', step: 10, firstPrice: 300, deltaPerStep: 28, minPrice: 0 }
+      // 促銷顯示用途：每滿 11 件，折抵 1 件金額（11 件收 10 件）
+      { type: 'BUY_X_GET_Y', buy: 10, free: 1 }
     ]
   }
 ]
