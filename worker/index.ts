@@ -7,7 +7,7 @@ export interface Env {
   DEV_BYPASS_ACCESS?: string
   DEV_BYPASS_TURNSTILE?: string
   ENVIRONMENT?: string
-  ADMIN_PASSWORD?: string
+  ADMIN_PASSWORD_HASH?: string
 }
 
 const MAX_NAME = 100
@@ -124,9 +124,77 @@ async function simpleHash(s: string): Promise<string> {
 
 const ADMIN_SESSION_COOKIE = "admin_session"
 
+type AdminPasswordHashConfig = {
+  algorithm: "PBKDF2-SHA256"
+  iterations: number
+  salt: Uint8Array
+  hash: Uint8Array
+}
+
+function decodeBase64ToBytes(s: string): Uint8Array | null {
+  try {
+    const bin = atob(s)
+    const out = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
+    return out
+  } catch {
+    return null
+  }
+}
+
+function parseAdminPasswordHash(encoded: string | undefined): AdminPasswordHashConfig | null {
+  const raw = (encoded ?? "").trim()
+  if (!raw) return null
+  const parts = raw.split("$")
+  if (parts.length !== 5) return null
+  const [scheme, digest, iterRaw, saltB64, hashB64] = parts
+  if (scheme !== "pbkdf2" || digest !== "sha256") return null
+  const iterations = Number.parseInt(iterRaw, 10)
+  if (!Number.isInteger(iterations) || iterations < 100_000 || iterations > 2_000_000) return null
+  const salt = decodeBase64ToBytes(saltB64)
+  const hash = decodeBase64ToBytes(hashB64)
+  if (!salt || !hash || salt.length < 16 || hash.length < 32) return null
+  return { algorithm: "PBKDF2-SHA256", iterations, salt, hash }
+}
+
+async function deriveAdminPasswordHash(password: string, cfg: AdminPasswordHashConfig): Promise<Uint8Array> {
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  )
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: cfg.salt,
+      iterations: cfg.iterations,
+    },
+    keyMaterial,
+    cfg.hash.length * 8
+  )
+  return new Uint8Array(bits)
+}
+
+function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false
+  let diff = 0
+  for (let i = 0; i < a.length; i++) diff |= a[i]! ^ b[i]!
+  return diff === 0
+}
+
+async function verifyAdminPasswordInput(password: string, env: Env): Promise<boolean> {
+  const cfg = parseAdminPasswordHash(env.ADMIN_PASSWORD_HASH)
+  if (!cfg) return false
+  const derived = await deriveAdminPasswordHash(password, cfg)
+  return timingSafeEqual(derived, cfg.hash)
+}
+
 async function getAdminSessionToken(env: Env): Promise<string> {
-  const pw = env.ADMIN_PASSWORD ?? ""
-  return simpleHash(pw + "admin_session_salt")
+  const hash = (env.ADMIN_PASSWORD_HASH ?? "").trim()
+  return simpleHash(hash + "admin_session_salt")
 }
 
 function getAdminCookie(req: Request): string | null {
@@ -136,8 +204,8 @@ function getAdminCookie(req: Request): string | null {
 }
 
 async function verifyAdminSession(req: Request, env: Env): Promise<boolean> {
-  const pw = env.ADMIN_PASSWORD
-  if (!pw) return true
+  const hash = (env.ADMIN_PASSWORD_HASH ?? "").trim()
+  if (!hash) return false
   const expected = await getAdminSessionToken(env)
   const got = getAdminCookie(req)
   return !!got && got === expected
@@ -1068,11 +1136,14 @@ export default {
     }
 
     if (url.pathname === "/api/admin/verify-password" && req.method === "POST") {
-      const pw = env.ADMIN_PASSWORD
-      if (!pw) return json(safeError("Admin password not configured"), { status: 503, allowedOrigins, origin })
+      const hash = (env.ADMIN_PASSWORD_HASH ?? "").trim()
+      if (!parseAdminPasswordHash(hash)) {
+        return json(safeError("Admin password hash not configured"), { status: 503, allowedOrigins, origin })
+      }
       const body = (await safeJson(req)) as { password?: string } | null
       const input = String(body?.password ?? "").trim()
-      if (input !== pw) return json(safeError("密碼錯誤"), { status: 401, allowedOrigins, origin })
+      const ok = await verifyAdminPasswordInput(input, env)
+      if (!ok) return json(safeError("密碼錯誤"), { status: 401, allowedOrigins, origin })
       const token = await getAdminSessionToken(env)
       const headers: Record<string, string> = { ...getCorsHeaders(origin ?? null, allowedOrigins) }
       headers["Set-Cookie"] = `${ADMIN_SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400`

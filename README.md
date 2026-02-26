@@ -2,6 +2,11 @@
 
 Vue 3 + TypeScript + Vite 電商前台，後端為 Cloudflare Worker + D1。
 
+## 本機重建（建議先看）
+
+- 請先閱讀：`docs/LOCAL_DEV.md`
+- 固定啟動順序：`npm run dev:api` → `npm run dev:web`
+
 ## 專案結構
 
 ```
@@ -100,6 +105,19 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8787/api/orders" -Method POST -Body $bo
 | `npm run dev` / `npm run dev:web` | 啟動 Vite 前端 |
 | `npm run dev:api` | 啟動 Wrangler Worker 後端 |
 | `npm run build` | 建置前端 |
+
+## 後台密碼設定（禁止明文）
+
+- 不要在任何檔案放明文密碼（包含 `wrangler.toml`、repo、log）
+- Worker 使用 `ADMIN_PASSWORD_HASH`，格式：
+  - `pbkdf2$sha256$<iterations>$<salt_base64>$<hash_base64>`
+- 產生 hash：
+
+```bash
+node ./tools/gen-admin-password-hash.mjs
+```
+
+- 將輸出值設定到環境變數 `ADMIN_PASSWORD_HASH`（不要提交真值）
 
 ## 後端打不開時
 

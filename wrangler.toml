@@ -13,8 +13,10 @@ ALLOWED_ORIGINS = "http://localhost:5173,https://mistmall-clean-b.pages.dev"
 # DEV_BYPASS_TURNSTILE: "true" for local only - skips Turnstile when host is localhost
 DEV_BYPASS_ACCESS = "true"
 DEV_BYPASS_TURNSTILE = "true"
-# 後台登入密碼（測試環境預設 123456，正式請改為強密碼）
-ADMIN_PASSWORD = "123456"
+# 後台登入密碼雜湊（禁止明文）：
+# 格式：pbkdf2$sha256$<iterations>$<salt_base64>$<hash_base64>
+# 產生方式：node ./tools/gen-admin-password-hash.mjs
+# ADMIN_PASSWORD_HASH = "pbkdf2$sha256$210000$...$..."
 
 [[d1_databases]]
 binding = "DB"
