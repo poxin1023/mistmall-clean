@@ -1,0 +1,23 @@
+name = "mistmall-api"
+main = "worker/index.ts"
+workers_dev = false
+preview_urls = false
+compatibility_date = "2025-01-01"
+
+[vars]
+ALLOWED_ORIGINS = "http://localhost:5173,https://mistmall-clean-b.pages.dev"
+# TURNSTILE_SECRET_KEY: wrangler secret put TURNSTILE_SECRET_KEY (local: 1x0000000000000000000000000000000AA)
+# CF_ACCESS_TEAM_DOMAIN: yourteam.cloudflareaccess.com (Zero Trust > Access > Applications)
+# CF_ACCESS_AUD: Application AUD from Access policy (e.g. 1234567890abcdef)
+# DEV_BYPASS_ACCESS: "true" for local only - skips Access JWT when host is localhost
+# DEV_BYPASS_TURNSTILE: "true" for local only - skips Turnstile when host is localhost
+DEV_BYPASS_ACCESS = "true"
+DEV_BYPASS_TURNSTILE = "true"
+# 後台登入密碼（測試環境預設 123456，正式請改為強密碼）
+ADMIN_PASSWORD = "123456"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mistmall-api"
+database_id = "427c4c4d-43d2-4037-8e4f-d3b1d9418357"
+migrations_dir = "migrations"

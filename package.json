@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:web": "vite",
+    "dev:api": "wrangler dev --port 8787",
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview"
   },
@@ -20,7 +22,8 @@
     "@vue/tsconfig": "^0.8.1",
     "typescript": "~5.9.3",
     "vite": "npm:rolldown-vite@7.2.5",
-    "vue-tsc": "^3.1.4"
+    "vue-tsc": "^3.1.4",
+    "wrangler": "^4.68.0"
   },
   "overrides": {
     "vite": "npm:rolldown-vite@7.2.5"
