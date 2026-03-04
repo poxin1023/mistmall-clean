@@ -80,8 +80,21 @@ function clearAll() {
 }
 
 function activeStyle(color: string) {
-  // 背景填色（接近圖示風格），文字變白
-  return { background: color, color: '#fff' }
+  return {
+    '--tag-color': color,
+    '--tag-bg': hexToRgba(color, 0.2),
+    '--tag-border': hexToRgba(color, 0.45),
+    '--tag-shadow': hexToRgba(color, 0.24)
+  }
+}
+
+function hexToRgba(color: string, alpha: number) {
+  const hex = color.replace('#', '').trim()
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) return `rgba(148, 163, 184, ${alpha})`
+  const r = Number.parseInt(hex.slice(0, 2), 16)
+  const g = Number.parseInt(hex.slice(2, 4), 16)
+  const b = Number.parseInt(hex.slice(4, 6), 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 </script>
 
@@ -102,5 +115,48 @@ function activeStyle(color: string) {
   line-height: 1.2;
   font-weight: 600;
   opacity: 0.85;
+}
+
+.tags-row {
+  row-gap: 10px;
+}
+
+.tag {
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+}
+
+.tag.active {
+  padding: 5px 9px;
+  color: var(--tag-color, #334155);
+  border-color: var(--tag-border, rgba(148, 163, 184, 0.45));
+  background:
+    linear-gradient(140deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.18)),
+    var(--tag-bg, rgba(148, 163, 184, 0.2));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 2px 8px var(--tag-shadow, rgba(148, 163, 184, 0.24));
+  backdrop-filter: blur(7px) saturate(130%);
+  -webkit-backdrop-filter: blur(7px) saturate(130%);
+}
+
+.tag .dot {
+  width: 9px;
+  height: 9px;
+}
+
+.tag.active .dot {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.72);
+}
+
+.tag .x {
+  font-size: 14px;
+  line-height: 1;
+  margin-left: 2px;
 }
 </style>

@@ -382,19 +382,17 @@ function validPhoneTw(v: string) {
 /** ✅ 本機開發時要打 Worker；上線同網域時可用相對路徑 */
 function apiBase() {
   const host = window.location.hostname
-  const WORKER = 'https://mistmall-clean.pubg1023pubg.workers.dev'
+  const WORKER_LOCAL = 'http://127.0.0.1:8787'
+  const API_PROD = 'https://api.kissgood.co'
 
-  // ✅ 開發/手機測試：localhost、127.*、以及區網 IP（192.168.* / 10.* / 172.16~31.*）
   const isLocalhost = host === 'localhost' || host === '127.0.0.1'
   const isLanIp =
     /^192\.168\.\d+\.\d+$/.test(host) ||
     /^10\.\d+\.\d+\.\d+$/.test(host) ||
     /^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(host)
 
-  if (isLocalhost || isLanIp) return WORKER
-
-  // ✅ 正式上線：如果你之後把前台跟 API 放同一網域（例如 https://www.xxx.com/api），就走相對路徑
-  return ''
+  if (isLocalhost || isLanIp) return WORKER_LOCAL
+  return API_PROD
 }
 
 

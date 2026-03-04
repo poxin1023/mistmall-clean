@@ -69,8 +69,13 @@ function goDetail() {
 /* 商品名稱 */
 .card-title {
   font-size: 1em;
-  line-height: 1.25;
+  line-height: 1.35;
   font-weight: 600;
+  min-height: 2.7em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* ✅ 價格容器：不換行 + baseline 對齊 */
@@ -79,21 +84,24 @@ function goDetail() {
   align-items: baseline;
   gap: 4px;
 
-  font-size: calc(0.65em * 1.3); /* 原本設定保留 */
+  font-size: 1rem;
   line-height: 1.2;
-  font-weight: 600;
+  font-weight: 800;
+  color: #2563eb;
 
   white-space: nowrap; /* ✅ 關鍵：永遠不換行 */
 }
 
 /* NT$ 比數字小一點，符合商業 UI */
 .nt {
-  font-size: 0.85em;
+  font-size: 0.78em;
+  font-weight: 700;
 }
 
 /* 數字本體 */
 .price-num {
-  font-size: 1em;
+  font-size: 1.1em;
+  letter-spacing: 0.2px;
 }
 
 /* 卡片下方排版 */
@@ -101,19 +109,29 @@ function goDetail() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
+  margin-top: 8px;
+  min-width: 0;
 }
 
 /* pill：與價格同步放大 */
 .pill {
-  font-size: calc(0.65em * 1.3);
-  line-height: 1.2;
+  font-size: 0.8rem;
+  line-height: 1;
   font-weight: 600;
 
-  padding: 0.4em 0.9em;
+  padding: 0.36em 0.76em;
   border: 1px solid;
   border-radius: 999px;
   background: transparent;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 56%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 2px;
+  flex: 0 1 auto;
 }
 </style>

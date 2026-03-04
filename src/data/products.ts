@@ -1449,7 +1449,7 @@ const BASE_PRODUCTS: Product[] = [
   // USB充電式電烙筆
   {
     id: 'usb_herb_tool_500',
-    name: 'USB充電式 ',
+    name: '充電式USB',
     tag: 'grinder_420',
     price: 500,
     image: '/products/THC1.jpg',
