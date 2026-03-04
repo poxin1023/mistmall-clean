@@ -1,0 +1,16 @@
+{
+  "name": "mistmall-api",
+  "main": "src/index.js",
+  "workers_dev": false,
+  "preview_urls": false,
+  "compatibility_date": "2025-01-01",
+  "vars": {
+    "ALLOWED_ORIGINS": "https://mistmall-clean-b.pages.dev"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_id": "427c4c4d-43d2-4037-8e4f-d3b1d9418357"
+    }
+  ]
+}
