@@ -68,7 +68,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useCartStore, type CartVariantLine, type CartItem, PROMO_PRODUCT_ID } from '../store/cart'
+import { useCartStore, type CartVariantLine, type CartItem } from '../store/cart'
 
 defineProps<{ open: boolean }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -96,8 +96,6 @@ function removeCard(itemId: string) {
 }
 
 function lineSubtotal(itemId: string, productId: string, key: string, qty: number, unitPrice: number) {
-  if (productId !== PROMO_PRODUCT_ID) return qty * unitPrice
-
   const it = cart.items.find(i => i.itemId === itemId)
   if (!it) return qty * unitPrice
 

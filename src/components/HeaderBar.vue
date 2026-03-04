@@ -34,8 +34,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, nextTick, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useCartStore } from '../store/cart'
 import CartDrawer from './CartDrawer.vue'
 
@@ -44,6 +44,7 @@ defineProps<{
 }>()
 
 const router = useRouter()
+const route = useRoute()
 const cart = useCartStore()
 const cartOpen = ref(false)
 
@@ -69,8 +70,16 @@ const cartCount = computed(() => {
   return 0
 })
 
-function goProducts() {
-  router.push('/products')
+async function goProducts() {
+  if (route.path.startsWith('/products')) {
+    window.dispatchEvent(new Event('products-title-replay'))
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    return
+  }
+
+  await router.push('/products')
+  await nextTick()
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 function goNotice() {
   router.push('/notice')

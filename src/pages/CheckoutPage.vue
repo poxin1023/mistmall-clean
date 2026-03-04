@@ -223,7 +223,7 @@
 import { computed, reactive, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import HeaderBar from '../components/HeaderBar.vue'
-import { useCartStore, PROMO_PRODUCT_ID, type CartItem, type CartVariantLine } from '../store/cart'
+import { useCartStore, type CartItem, type CartVariantLine } from '../store/cart'
 import { STORES_711, type Store711 } from '../data/stores711'
 
 const router = useRouter()
@@ -255,11 +255,8 @@ function itemQty(it: CartItem) {
 }
 
 function itemAmount(it: CartItem) {
-  if (it.productId === PROMO_PRODUCT_ID) {
-    const payable = cart.getPayableLines(it.productId, it.lines as CartVariantLine[])
-    return payable.reduce((a: number, l: any) => a + (l.payableQty ?? l.qty) * l.unitPrice, 0)
-  }
-  return it.lines.reduce((a, l) => a + l.qty * l.unitPrice, 0)
+  const payable = cart.getPayableLines(it.productId, it.lines as CartVariantLine[])
+  return payable.reduce((a: number, l: any) => a + (l.payableQty ?? l.qty) * l.unitPrice, 0)
 }
 
 const itemsSubtotal = computed(() => cart.items.reduce((acc, it) => acc + itemAmount(it), 0))

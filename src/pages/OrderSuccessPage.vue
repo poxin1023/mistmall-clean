@@ -2,6 +2,27 @@
 <template>
   <HeaderBar :showBack="true" />
 
+  <div
+    v-if="showCompleteModal"
+    class="complete-modal-mask"
+    role="dialog"
+    aria-modal="true"
+    aria-label="下單完成提醒"
+    @click.self="closeCompleteModal"
+  >
+    <div class="complete-modal-card">
+      <button
+        class="complete-modal-close"
+        type="button"
+        aria-label="關閉下單完成提醒"
+        @click="closeCompleteModal"
+      >
+        ×
+      </button>
+      <img class="complete-modal-image" src="/products/127.png" alt="下單完成提醒" />
+    </div>
+  </div>
+
   <!-- 🔔 下單完成提示（新增） -->
   <div class="order-tip">
     感謝您的下單，訂單待確認請回報。
@@ -23,7 +44,9 @@
         <div class="k">訂單號</div>
         <div class="v mono">
           {{ order.orderNo }}
-          <button class="copy" type="button" @click="copy(order.orderNo)">複製</button>
+          <button class="copy" type="button" @click="copy(order.orderNo)">
+            {{ copied ? '已複製' : '複製' }}
+          </button>
         </div>
       </div>
 
@@ -137,11 +160,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import HeaderBar from '../components/HeaderBar.vue'
+import { copyText } from '../utils/clipboard'
 
 const router = useRouter()
+const showCompleteModal = ref(true)
+const copied = ref(false)
+let copiedTimer: number | null = null
 
 type OrderItemPayload = {
   productName: string
@@ -184,18 +211,85 @@ const order = computed<OrderPayload>(() => {
 })
 
 async function copy(v: string) {
-  await navigator.clipboard.writeText(v)
+  const ok = await copyText(v)
+  if (!ok) return
+  copied.value = true
+  if (copiedTimer !== null) window.clearTimeout(copiedTimer)
+  copiedTimer = window.setTimeout(() => {
+    copied.value = false
+    copiedTimer = null
+  }, 1200)
 }
 
 function goHome() { router.push('/products') }
 function goContinue() { router.push('/products') }
 function goOrders() { router.push('/orders') }
+function closeCompleteModal() {
+  showCompleteModal.value = false
+}
 function goTelegram() {
   window.open('https://t.me/Zero777o', '_blank')
 }
+
+onBeforeUnmount(() => {
+  if (copiedTimer !== null) window.clearTimeout(copiedTimer)
+})
 </script>
 
 <style scoped>
+.complete-modal-mask{
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.complete-modal-card{
+  position: relative;
+  width: min(92vw, 420px);
+  padding-top: 46px;
+}
+
+.complete-modal-image{
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+}
+
+.complete-modal-close{
+  position: absolute;
+  top: 2px;
+  right: 8px;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  border-radius: 999px;
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.15));
+  backdrop-filter: blur(10px) saturate(150%);
+  -webkit-backdrop-filter: blur(10px) saturate(150%);
+  color: #000;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow:
+    0 8px 16px rgba(15, 23, 42, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  z-index: 2;
+}
+
+.complete-modal-close:active{
+  transform: scale(0.96);
+}
+
 .container { max-width: 980px; margin: 0 auto; padding: 12px 14px 90px; }
 
 /* 成功標頭 */

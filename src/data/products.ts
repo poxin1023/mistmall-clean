@@ -27,42 +27,23 @@ export type Product = {
 }
 
 const SOLD_STORE_PREFIX = 'sold_count_v1'
+const INITIAL_SOLD_MIN = 80
+const INITIAL_SOLD_MAX = 980
+const DAILY_INC_MIN = 3
+const DAILY_INC_MAX = 8
 
 function randInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
-function productText(p: Product): string {
-  return [p.name, p.shortDesc, p.tag].filter(Boolean).join(' ')
-}
-
-function isHost(p: Product): boolean {
-  return productText(p).includes('主機')
-}
-
-function isGen1(p: Product): boolean {
-  const t = productText(p)
-  return t.includes('一代') && (t.includes('菸彈') || t.includes('煙彈'))
-}
-
-const SP2S_BUNDLE_ID = 'sp2s_pod_bundle'
-const SP2S_SOLD_BASE = 957
-const MEME_DISPOSABLE_ID = 'meme_disposable_7000'
-const MEME_SOLD_BASE = 627
-const DAILY_INC_MIN = 3
-const DAILY_INC_MAX = 8
-
 function capFor(p: Product): number {
-  if (p.id === SP2S_BUNDLE_ID || p.id === MEME_DISPOSABLE_ID) return 99999
-  return isHost(p) ? 20 : 500
+  void p
+  return 99999
 }
 
 function initialSold(p: Product): number {
-  if (p.id === SP2S_BUNDLE_ID) return SP2S_SOLD_BASE
-  if (p.id === MEME_DISPOSABLE_ID) return MEME_SOLD_BASE
-  if (isHost(p)) return randInt(1, 20)
-  if (isGen1(p)) return randInt(79, 160)
-  return randInt(10, 200)
+  void p
+  return randInt(INITIAL_SOLD_MIN, INITIAL_SOLD_MAX)
 }
 
 function getClientScopeKey(): string {
@@ -79,29 +60,11 @@ function getClientScopeKey(): string {
 }
 
 function applyDailyIncrements(products: Product[], counts: Record<string, number>) {
-  // SP2S 買10送1 20送2、MEME 7000：每日固定 +3~8 隨機
-  for (const id of [SP2S_BUNDLE_ID, MEME_DISPOSABLE_ID]) {
-    const p = products.find((x) => x.id === id)
-    if (p) {
-      const current = counts[p.id] ?? initialSold(p)
-      const inc = randInt(DAILY_INC_MIN, DAILY_INC_MAX)
-      counts[p.id] = Math.min(capFor(p), current + inc)
-    }
-  }
-
-  const otherIndices = products
-    .map((_, i) => i)
-    .filter((i) => products[i]?.id !== SP2S_BUNDLE_ID && products[i]?.id !== MEME_DISPOSABLE_ID)
-  const picks = new Set<number>()
-  while (otherIndices.length > 0 && picks.size < Math.min(3, otherIndices.length)) {
-    const idx = otherIndices[randInt(0, otherIndices.length - 1)]
-    if (typeof idx === 'number') picks.add(idx)
-  }
-  for (const idx of picks) {
-    const p = products[idx]
-    if (!p) continue
-    const inc = randInt(3, 15)
+  // 全商品統一規則：每天每個商品都隨機 +3~8
+  // 新增商品只要放進 BASE_PRODUCTS，會自動套用這裡的規則。
+  for (const p of products) {
     const current = counts[p.id] ?? initialSold(p)
+    const inc = randInt(DAILY_INC_MIN, DAILY_INC_MAX)
     counts[p.id] = Math.min(capFor(p), current + inc)
   }
 }
@@ -125,9 +88,7 @@ function withSoldCount(products: Product[]): Product[] {
 
   for (const p of products) {
     const value = counts[p.id]
-    if (p.id === SP2S_BUNDLE_ID && (typeof value !== 'number' || value < SP2S_SOLD_BASE)) {
-      counts[p.id] = SP2S_SOLD_BASE
-    } else if (typeof value !== 'number' || value <= 0) {
+    if (typeof value !== 'number' || value <= 0) {
       counts[p.id] = initialSold(p)
     } else {
       counts[p.id] = Math.min(capFor(p), Math.max(1, Math.floor(value)))
@@ -1126,14 +1087,14 @@ const BASE_PRODUCTS: Product[] = [
 }
 ,
 {
-  id: 'sp2s_max_hinex_replaceable_device',
-  name: 'SP2S MAX HINEX換彈式主機',
+  id: 'sp2s_max_ㄒㄧㄠ_replaceable_device',
+  name: 'HINEX換彈式主機',
   tag: 'replaceable_device',
   price: 620,
   image: '/products/SP2s Max hine X.jpg',
   images: [
     '/products/SP2s Max hine X.jpg',
-    '/products/SP2s Max hine 2X.jpg'
+    '/products/SP2s Max hine X.jpg'
   ],
   shortDesc: '換彈式主機',
   specs: [

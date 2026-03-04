@@ -1,5 +1,7 @@
 // src/store/cart.ts
 import { defineStore } from 'pinia'
+import { BUY10_GET1_PRODUCT_ID } from '../data/promotions'
+import { calcPayableLines } from '../promotions/engine'
 
 export type CartVariantLine = {
   key: string
@@ -16,71 +18,22 @@ export type CartItem = {
   displayQty: number
 }
 
-// ✅ 促銷商品 id
-export const PROMO_PRODUCT_ID = 'sp2s_pod_bundle'
+// 舊相容常數：保留給既有頁面使用
+export const PROMO_PRODUCT_ID = BUY10_GET1_PRODUCT_ID
 
 function newItemId() {
   return `${Date.now()}_${Math.random().toString(16).slice(2)}`
 }
 
-/**
- * ✅ SP2S 促銷折抵規則：11 件算 10 件（買10送1、買20送2…）
- * - q < 10 => 0
- * - q % 10 === 0 => 0（剛好整10件，不折抵）
- * - 其他 => floor(q/10)
- */
-function calcFreeDeductQty_SP2S(selectedQty: number) {
-  if (selectedQty < 10) return 0
-  if (selectedQty % 10 === 0) return 0
-  return Math.floor(selectedQty / 10)
-}
-
-// ✅ badge/抽屜標題顯示用件數（含贈品）
+// badge/抽屜標題顯示用件數
 export function calcDisplayQty(productId: string, selectedQty: number) {
   if (selectedQty <= 0) return 0
-  if (productId === PROMO_PRODUCT_ID) {
-    const gift = Math.floor(selectedQty / 10)
-    return selectedQty + gift
-  }
+  void productId
   return selectedQty
 }
 
-function sumSubtotal(lines: CartVariantLine[]) {
-  return lines.reduce((acc, l) => acc + l.qty * l.unitPrice, 0)
-}
-
-/**
- * ✅ 促銷折抵分配：單價高的先折抵（對客戶最有利）
- */
 function calcPayableLinesWithPromo(productId: string, lines: CartVariantLine[]) {
-  const cleaned = lines.filter(l => l.qty > 0)
-
-  if (productId !== PROMO_PRODUCT_ID) {
-    return cleaned.map(l => ({ ...l, payableQty: l.qty }))
-  }
-
-  const selectedQty = cleaned.reduce((acc, l) => acc + l.qty, 0)
-  const freeDeductQty = calcFreeDeductQty_SP2S(selectedQty)
-
-  if (freeDeductQty <= 0) {
-    return cleaned.map(l => ({ ...l, payableQty: l.qty }))
-  }
-
-  const sorted = [...cleaned].sort((a, b) => b.unitPrice - a.unitPrice)
-
-  let remain = freeDeductQty
-  const mapped: Array<CartVariantLine & { payableQty: number }> = []
-
-  for (const l of sorted) {
-    const canFree = Math.min(l.qty, remain)
-    const payableQty = l.qty - canFree
-    remain -= canFree
-    mapped.push({ ...l, payableQty })
-  }
-
-  // 還原原本順序，避免畫面跳動
-  const byKey = new Map(mapped.map(x => [x.key, x]))
-  return cleaned.map(l => byKey.get(l.key) ?? ({ ...l, payableQty: l.qty }))
+  return calcPayableLines(productId, lines)
 }
 
 export const useCartStore = defineStore('cart', {
@@ -96,12 +49,9 @@ export const useCartStore = defineStore('cart', {
     // ✅ 總金額：每張卡片各自套用促銷折抵後再加總
     totalAmount(state) {
       return state.items.reduce((acc, it) => {
-        if (it.productId === PROMO_PRODUCT_ID) {
-          const payable = calcPayableLinesWithPromo(it.productId, it.lines)
-          const amount = payable.reduce((a, l) => a + l.payableQty * l.unitPrice, 0)
-          return acc + amount
-        }
-        return acc + sumSubtotal(it.lines)
+        const payable = calcPayableLinesWithPromo(it.productId, it.lines)
+        const amount = payable.reduce((a, l) => a + l.payableQty * l.unitPrice, 0)
+        return acc + amount
       }, 0)
     }
   },

@@ -136,6 +136,7 @@ function showToast(msg: string) {
 const route = useRoute()
 const fullTitle = '精選商品'
 const typedTitle = ref('')
+const PRODUCT_TITLE_REPLAY_EVENT = 'products-title-replay'
 
 let typingTimer: number | null = null
 
@@ -157,6 +158,9 @@ function startTyping() {
     }
   }, 120) // ✅ 速度：80 更快、150 更慢
 }
+function handleTitleReplay() {
+  startTyping()
+}
 
 onMounted(() => {
   // 你原本的 toast 邏輯
@@ -168,6 +172,7 @@ onMounted(() => {
 
   // ✅ 首次進入本頁播放
   startTyping()
+  window.addEventListener(PRODUCT_TITLE_REPLAY_EVENT, handleTitleReplay)
 })
 
 // ✅ 每次路由切回 /products 都重播
@@ -179,6 +184,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  window.removeEventListener(PRODUCT_TITLE_REPLAY_EVENT, handleTitleReplay)
   if (typingTimer !== null) window.clearInterval(typingTimer)
 })
 </script>
@@ -188,9 +194,15 @@ onBeforeUnmount(() => {
 .type-title{
   display: inline-flex;
   align-items: baseline;
+  font-size: 150%;
+  color: #7c3aed;
 }
 .type-text{
   white-space: nowrap;
+  background: linear-gradient(90deg, #e83e8c 0%, #a855f7 50%, #4f46e5 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 .type-caret{
   width: 0.55em;

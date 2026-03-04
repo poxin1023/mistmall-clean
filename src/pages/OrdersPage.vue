@@ -64,7 +64,9 @@
             <div class="k">訂單號</div>
             <div class="v mono">
               {{ o.orderNo }}
-              <button class="copy" type="button" @click="copy(o.orderNo)">複製</button>
+              <button class="copy" type="button" @click="copy(o.orderNo)">
+                {{ copiedOrderNo === o.orderNo ? '已複製' : '複製' }}
+              </button>
             </div>
           </div>
 
@@ -98,8 +100,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import HeaderBar from '../components/HeaderBar.vue'
+import { copyText } from '../utils/clipboard'
 
 type OrderItemPayload = {
   productName: string
@@ -126,6 +129,8 @@ const phone = ref('')
 const err = ref('')
 const searched = ref(false)
 const list = ref<OrderPayload[]>([])
+const copiedOrderNo = ref('')
+let copiedTimer: number | null = null
 
 function validPhoneTw(v: string) {
   return /^09\d{8}$/.test(v)
@@ -176,14 +181,23 @@ function onSearch() {
 }
 
 async function copy(text: string) {
-  try {
-    await navigator.clipboard.writeText(text)
-  } catch {}
+  const ok = await copyText(text)
+  if (!ok) return
+  copiedOrderNo.value = text
+  if (copiedTimer !== null) window.clearTimeout(copiedTimer)
+  copiedTimer = window.setTimeout(() => {
+    copiedOrderNo.value = ''
+    copiedTimer = null
+  }, 1200)
 }
 
 function goTelegram() {
   window.open('https://t.me/Zero777o', '_blank')
 }
+
+onBeforeUnmount(() => {
+  if (copiedTimer !== null) window.clearTimeout(copiedTimer)
+})
 </script>
 
 <style scoped>

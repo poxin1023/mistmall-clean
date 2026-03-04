@@ -66,21 +66,17 @@
           總價：<b>NT$ {{ totalPrice }}</b>
         </div>
 
-        <div class="promo" v-if="isPromoProduct">
-          <div class="promo-title">多件優惠</div>
-          <div class="promo-line">買10送1、買20送2（同商品不同規格累計）</div>
-
+        <div class="promo" v-if="promoRule">
+          <div class="promo-head">
+            <div class="promo-title">多件優惠｜買 {{ promoRule.buy }} 送 {{ promoRule.free }}</div>
+            <span class="promo-badge">同商品不同規格可累計</span>
+          </div>
           <div class="promo-line">
-            目前可送：<b>{{ giftQty }}</b> 件
-            <span v-if="totalQty > 0 && nextGiftNeed > 0">｜再差 {{ nextGiftNeed }} 件可再送</span>
+            每滿 {{ promoCycleQty }} 件，只需付 {{ promoRule.buy }} 件
+            （{{ promoCycleQty * 2 }} 件付 {{ promoRule.buy * 2 }}、{{ promoCycleQty * 3 }} 件付 {{ promoRule.buy * 3 }}，以此類推）
           </div>
-
-          <div class="promo-line" v-if="freeDeductQty > 0">
-            本次自動不計價：<b>{{ freeDeductQty }}</b> 件（達優惠門檻）
-          </div>
-
-          <div class="promo-line" v-if="totalQty > 0 && totalQty < 10">
-            尚未達成優惠門檻（10 件），仍可正常下單。
+          <div class="promo-chip">
+            本次可送 <b>{{ giftQty }}</b> 件
           </div>
         </div>
 
@@ -141,6 +137,11 @@ import HeaderBar from '../components/HeaderBar.vue'
 import { PRODUCTS } from '../data/products'
 import { useCartStore } from '../store/cart'
 import { getPromotionByProductId } from '../data/promotions'
+import {
+  calcGiftQtyFromSelectedQty,
+  calcTierUnitPrice,
+  getBuyXGetYRule
+} from '../promotions/engine'
 
 const route = useRoute()
 const router = useRouter()
@@ -152,7 +153,10 @@ const product = computed(() => {
 })
 
 const basePrice = computed(() => product.value?.price ?? 0)
-const isPromoProduct = computed(() => product.value?.id === 'sp2s_pod_bundle')
+const promoRule = computed(() => {
+  if (!product.value) return undefined
+  return getBuyXGetYRule(product.value.id)
+})
 
 const qtyMap = reactive<Record<string, number>>({})
 
@@ -181,49 +185,17 @@ const totalQty = computed(() => {
   return sum
 })
 
-/** 買10送1：顯示用 */
 const giftQty = computed(() => {
-  if (!isPromoProduct.value) return 0
-  return Math.floor(totalQty.value / 10)
+  if (!promoRule.value) return 0
+  return calcGiftQtyFromSelectedQty(totalQty.value, promoRule.value.buy, promoRule.value.free)
 })
 
-/** 你現有規則：非整10才折抵 */
-const freeDeductQty = computed(() => {
-  if (!isPromoProduct.value) return 0
-  const q = totalQty.value
-  if (q < 10) return 0
-  if (q % 10 === 0) return 0
-  return Math.floor(q / 10)
+const payableQty = computed(() => Math.max(0, totalQty.value - giftQty.value))
+
+const promoCycleQty = computed(() => {
+  if (!promoRule.value) return 0
+  return promoRule.value.buy + promoRule.value.free
 })
-
-const nextGiftNeed = computed(() => {
-  if (!isPromoProduct.value) return 0
-  const q = totalQty.value
-  if (q <= 0) return 0
-  const mod = q % 10
-  return mod === 0 ? 10 : 10 - mod
-})
-
-/** ✅ 依 promotions.ts 計算「促銷階梯單價」 */
-function calcTierUnitPrice(productId: string, selectedQty: number, fallback: number) {
-  const promo = getPromotionByProductId(productId)
-  if (!promo) return fallback
-
-  const tier = promo.rules.find(r => r.type === 'TIER_PRICING') as any | undefined
-  if (!tier) return fallback
-
-  const step = Number(tier.step ?? 0)
-  const firstPrice = Number(tier.firstPrice ?? fallback)
-  const delta = Number(tier.deltaPerStep ?? 0)
-  const minPrice = tier.minPrice !== undefined ? Number(tier.minPrice) : undefined
-
-  if (!step || selectedQty <= 0) return firstPrice
-
-  const level = Math.floor(Math.max(0, selectedQty - 1) / step)
-  let price = firstPrice - level * delta
-  if (minPrice !== undefined) price = Math.max(minPrice, price)
-  return price
-}
 
 const totalPrice = computed(() => {
   if (!product.value) return 0
@@ -231,9 +203,9 @@ const totalPrice = computed(() => {
   const selectedQty = totalQty.value
   if (selectedQty <= 0) return 0
 
-  if (isPromoProduct.value) {
+  if (getPromotionByProductId(product.value.id)) {
     const unit = calcTierUnitPrice(product.value.id, selectedQty, basePrice.value)
-    const payQty = selectedQty - freeDeductQty.value
+    const payQty = payableQty.value
     return payQty * unit
   }
 
@@ -258,7 +230,7 @@ function addToCart() {
 
   const selectedQty = totalQty.value
 
-  const unit = isPromoProduct.value
+  const unit = getPromotionByProductId(product.value.id)
     ? calcTierUnitPrice(product.value.id, selectedQty, basePrice.value)
     : basePrice.value
 
@@ -280,50 +252,14 @@ function addToCart() {
   router.push('/products')
 }
 
-/* =========================
-   ✅ 圖片放大 + 只有 meme_7000 可左右滑相簿
-   ========================= */
-
-// 你要做相簿的商品 id（你目前網址是 /product/meme_7000）
-const GALLERY_PRODUCT_ID = 'meme_7000'
-
-// meme_7000 的相簿清單（請把檔案放在 public/products/）
-const memeGallery = [
-  '/products/meme1 (1).jpg',
-  '/products/meme1 (2).jpg',
-  '/products/meme1 (3).jpg',
-  '/products/meme1 (4).jpg',
-  '/products/meme1 (5).jpg',
-  '/products/meme1 (6).jpg',
-  '/products/meme1 (7).jpg',
-  '/products/meme1 (8).jpg',
-  '/products/meme1 (9).jpg',
-  '/products/meme1 (10).jpg',
-  '/products/meme1 (11).jpg',
-  '/products/meme1 (12).jpg',
-  '/products/meme1 (13).jpg',
-  '/products/meme1 (14).jpg',
-  '/products/meme1 (15).jpg',
-  '/products/meme1 (16).jpg',
-  '/products/meme1 (17).jpg',
-  '/products/meme1 (18).jpg',
-  '/products/meme1 (19).jpg',
-  '/products/meme1 (20).jpg',
-  '/products/meme1 (21).jpg',
-  '/products/meme1 (22).jpg',
-  '/products/meme1 (23).jpg',
-  '/products/meme1 (24).jpg',
-  '/products/meme1 (25).jpg'
-]
-
 const isPreviewOpen = ref(false)
 const previewIndex = ref(0)
 
-// ✅ 預覽圖來源：meme_7000 => 相簿；其他 => 單張（product.image）
 const previewImages = computed(() => {
   if (!product.value) return []
-  if (product.value.id === GALLERY_PRODUCT_ID) return memeGallery
-  return product.value.image ? [product.value.image] : []
+  const productImages = Array.isArray(product.value.images) ? product.value.images : []
+  const merged = [product.value.image, ...productImages].filter((x): x is string => typeof x === 'string' && x.length > 0)
+  return [...new Set(merged)]
 })
 
 function openPreviewByIndex(idx: number) {
@@ -409,12 +345,64 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .qty-btn { width: 48px; height: 48px; border-radius: 12px; font-size: 24px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
 .qty-num { min-width: 32px; text-align: center; font-weight: 700; font-size: 16px; }
 .summary .row { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; }
-.summary .total { margin-top: 16px; font-size: 18px; line-height: 1.2; word-break: break-word; overflow-wrap: anywhere; }
+.summary .total { margin-top: 16px; font-size: 18px; line-height: 1.2; word-break: break-word; overflow-wrap: anywhere; color: #2563eb; font-weight: 900; }
+.summary .total b { color: #2563eb; }
 .btn.primary { width: 100%; margin-top: 12px; }
 .warn { color: #ef4444; font-size: 13px; margin-top: 10px; line-height: 1.25; word-break: break-word; overflow-wrap: anywhere; }
-.promo { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #e5e7eb; }
-.promo-title { font-weight: 700; }
-.promo-line { margin-top: 6px; opacity: 0.9; line-height: 1.25; }
+.promo{
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #fed7aa;
+  background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
+}
+.promo-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.promo-title{
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 900;
+  color: #c2410c;
+  font-size: 15px;
+}
+.promo-badge{
+  flex: 0 0 auto;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid #fdba74;
+  background: #fff;
+  color: #9a3412;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.promo-line{
+  margin-top: 8px;
+  color: #7c2d12;
+  font-size: 14px;
+  line-height: 1.35;
+  font-weight: 800;
+}
+.promo-chip{
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border: 1px solid #fdba74;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  color: #7c2d12;
+}
+.promo-chip b{
+  color: #dc2626;
+}
 
 @media (max-width: 520px) {
   .product-head { flex-direction: column; gap: 10px; }
@@ -422,6 +410,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   .media-box { aspect-ratio: 16 / 9; }
   .price { white-space: normal; }
   .layout { grid-template-columns: 1fr; }
+  .promo-title { font-size: 14px; }
+  .promo-badge { font-size: 11px; padding: 3px 8px; }
 }
 
 /* ✅ 預覽層 */
@@ -460,6 +450,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   cursor: pointer;
   font-size: 28px;
   line-height: 1;
+  font-weight: 900;
   z-index: 10000;
 }
 

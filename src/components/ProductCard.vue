@@ -14,13 +14,16 @@
       <div class="card-title">{{ product.name }}</div>
 
       <div class="card-meta">
-        <!-- ✅ 價格：NT$ + 數字 永遠同一行 -->
-        <div class="price">
-          <template v-if="product.price !== null">
-            <span class="nt">NT$</span>
-            <span class="price-num">{{ product.price }}</span>
-          </template>
-          <span v-else class="price-num">NT$（待補）</span>
+        <div class="meta-left">
+          <div class="sold">已售出 {{ soldCountText }} 件</div>
+          <!-- ✅ 價格：NT$ + 數字 永遠同一行 -->
+          <div class="price">
+            <template v-if="product.price !== null">
+              <span class="nt">NT$</span>
+              <span class="price-num">{{ product.price }}</span>
+            </template>
+            <span v-else class="price-num">NT$（待補）</span>
+          </div>
         </div>
 
         <!-- 標籤 pill -->
@@ -53,6 +56,12 @@ const pillStyle = computed(() => {
     borderColor: color,
     color: color
   }
+})
+
+const soldCountText = computed(() => {
+  const n = Number(props.product.sold_count ?? 0)
+  if (!Number.isFinite(n) || n <= 0) return 0
+  return Math.floor(n)
 })
 
 function goDetail() {
@@ -107,11 +116,23 @@ function goDetail() {
 /* 卡片下方排版 */
 .card-meta {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 6px;
   margin-top: 8px;
   min-width: 0;
+}
+
+.meta-left {
+  min-width: 0;
+}
+
+.sold {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.2;
+  margin-bottom: 3px;
+  white-space: nowrap;
 }
 
 /* pill：與價格同步放大 */
