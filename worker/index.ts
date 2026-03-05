@@ -365,6 +365,22 @@ const ADMIN_HTML = `<!doctype html>
     }
     .wrap { width: 100%; max-width: 1100px; margin: 0 auto; padding: 20px; position: relative; z-index: 1; }
     .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .header-inner { padding-top: 12px; padding-bottom: 10px; transition: max-height .26s ease, opacity .22s ease, transform .22s ease, padding .22s ease; max-height: 110px; overflow: hidden; }
+    .header-main { justify-content: space-between; flex-wrap: nowrap; }
+    .header-left { display: flex; align-items: center; min-width: 0; }
+    .header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+    .header-toggle-row { margin-top: 6px; justify-content: center; }
+    .pull-toggle {
+      min-height: 28px;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      color: #304967;
+      background: linear-gradient(165deg, rgba(255, 255, 255, 0.54) 0%, rgba(236, 246, 255, 0.30) 100%);
+      border: 1px solid rgba(255,255,255,0.5);
+    }
+    body.header-collapsed .header-inner { max-height: 36px; padding-top: 4px; padding-bottom: 4px; }
+    body.header-collapsed .header-main { opacity: 0; transform: translateY(-10px); pointer-events: none; height: 0; overflow: hidden; }
     .card {
       background: linear-gradient(170deg, rgba(255, 255, 255, 0.42) 0%, rgba(255, 255, 255, 0.22) 100%);
       border: 1px solid var(--border);
@@ -450,6 +466,16 @@ const ADMIN_HTML = `<!doctype html>
 
     button.danger { background: linear-gradient(165deg, rgba(255, 182, 166, 0.66) 0%, rgba(255, 128, 114, 0.52) 100%); color: #912f28; }
     button.ok { background: linear-gradient(165deg, rgba(126, 226, 179, 0.72) 0%, rgba(62, 197, 150, 0.58) 100%); color: #fff; }
+    button.soft {
+      background: linear-gradient(165deg, rgba(188, 216, 255, 0.62) 0%, rgba(209, 191, 255, 0.48) 100%);
+      color: #244667;
+      border-color: rgba(228, 239, 255, 0.62);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.75),
+        inset 0 -1px 0 rgba(180, 202, 234, 0.35),
+        0 10px 20px rgba(93, 128, 189, 0.2),
+        0 4px 10px rgba(93, 128, 189, 0.12);
+    }
 
     .muted { color: var(--text-muted); font-size: 13px; text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35); }
     .grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 16px; margin-top: 16px; width: 100%; position: relative; z-index: 1; }
@@ -457,7 +483,7 @@ const ADMIN_HTML = `<!doctype html>
     @media (max-width: 980px){ .grid { grid-template-columns: 1fr; } input { width: 100%; } }
 
     table { width: 100%; border-collapse: collapse; }
-    th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
     th {
       font-size: 12px;
       color: #5f748f;
@@ -468,6 +494,54 @@ const ADMIN_HTML = `<!doctype html>
     }
     tbody tr { transition: var(--transition); cursor: pointer; }
     tbody tr:hover td { background: rgba(255, 255, 255, 0.3); }
+    #list td { padding-top: 8px; padding-bottom: 8px; }
+    .order-no-cell { width: 126px; max-width: 126px; }
+    .order-no-text {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+      line-height: 1.22;
+      font-size: 13px;
+      word-break: break-all;
+    }
+    .status-cell .pill {
+      padding: 3px 8px;
+      font-size: 12px;
+      line-height: 1.15;
+      border-radius: 7px;
+      white-space: nowrap;
+    }
+    .recipient-cell { min-width: 0; }
+    .recipient-main,
+    .recipient-store {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      line-height: 1.2;
+      word-break: break-word;
+    }
+    .recipient-main {
+      -webkit-line-clamp: 1;
+      font-size: 13px;
+      color: #2b3f57;
+    }
+    .recipient-store {
+      -webkit-line-clamp: 1;
+      margin-top: 2px;
+      font-size: 12px;
+    }
+    .item-metrics {
+      margin-top: 4px;
+      line-height: 1.32;
+      font-size: 13px;
+    }
+    .item-metric-value {
+      color: #c5352d;
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+    }
 
     .pill { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; border: 1px solid transparent; transition: var(--transition); }
     .pill.pending { background: rgba(255, 225, 122, 0.36); color: #8a6901; border-color: rgba(255, 235, 166, 0.62); }
@@ -509,7 +583,20 @@ const ADMIN_HTML = `<!doctype html>
     .hr { height: 1px; background: var(--border); margin: 14px 0; }
 
     .row2 { display:flex; gap:12px; flex-wrap:nowrap; align-items:center; justify-content:space-between; position: relative; z-index: 120; }
-    .row2-filters { display:flex; gap:12px; flex-wrap:nowrap; align-items:center; }
+    .row2-filters { display:flex; gap:12px; flex-wrap:nowrap; align-items:center; overflow-x:auto; }
+    .quick-status { display:inline-flex; align-items:center; gap:6px; margin-left: 2px; }
+    .quick-status .muted.small { white-space: nowrap; }
+    .quick-status .custom-select.compact { min-width: 98px; width: 98px; flex: 0 0 auto; }
+    .quick-status .custom-select-trigger.compact {
+      min-height: 34px;
+      padding: 6px 26px 6px 8px;
+      font-size: 12px;
+      border-radius: 10px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      background-position: right 10px center;
+    }
 
     .custom-select { position: relative; min-width: 140px; z-index: 180; }
     .custom-select.open { z-index: 260; }
@@ -582,6 +669,51 @@ const ADMIN_HTML = `<!doctype html>
       -webkit-backdrop-filter: blur(18px) saturate(1.2);
     }
     #loginOverlay.show { display: flex; animation: overlayIn .22s ease both; }
+    #gameOverlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9900;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: max(16px, env(safe-area-inset-top)) 16px max(18px, env(safe-area-inset-bottom));
+      background:
+        radial-gradient(circle at 25% 10%, rgba(161,216,255,0.28), transparent 56%),
+        radial-gradient(circle at 86% 22%, rgba(254,196,220,0.24), transparent 58%),
+        rgba(10, 16, 24, 0.30);
+      backdrop-filter: blur(16px) saturate(1.15);
+      -webkit-backdrop-filter: blur(16px) saturate(1.15);
+    }
+    #gameOverlay.show { display: flex; animation: overlayIn .22s ease both; }
+    .game-modal {
+      width: 100%;
+      max-width: 440px;
+      border-radius: 24px;
+      padding: 16px;
+      background: linear-gradient(165deg, rgba(255,255,255,0.38), rgba(255,255,255,0.18));
+      border: 1px solid rgba(255,255,255,0.42);
+      box-shadow: 0 20px 48px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.72);
+      backdrop-filter: blur(24px) saturate(1.2);
+      -webkit-backdrop-filter: blur(24px) saturate(1.2);
+    }
+    .game-top { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .game-title { font-weight: 800; font-size: 18px; letter-spacing: -0.02em; }
+    .game-sub { margin-top: 4px; color: var(--text-muted); font-size: 13px; }
+    .game-actions { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+    .game-actions button { min-height: 42px; }
+    #gameResult {
+      margin-top: 12px;
+      min-height: 50px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.46);
+      background: linear-gradient(165deg, rgba(255,255,255,0.38), rgba(255,255,255,0.2));
+      color: var(--text);
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      line-height: 1.4;
+    }
     @keyframes overlayIn { from{ opacity:0 } to{ opacity:1 } }
 
     .login-shell { width: 100%; max-width: 420px; position: relative; }
@@ -762,7 +894,7 @@ const ADMIN_HTML = `<!doctype html>
 
       /* 2) table 至少要有寬度，才會啟用橫滑 */
       section.card table{
-        min-width: 640px !important;      /* 依你的 5 欄，手機建議 >= 600 */
+        min-width: 560px !important;      /* 4 欄版面 */
         table-layout: auto !important;
       }
 
@@ -785,18 +917,12 @@ const ADMIN_HTML = `<!doctype html>
       /* 5) 收件人欄：保持一行或兩行，不要直排 */
       section.card td:nth-child(3){
         white-space: normal !important;
-        line-height: 1.35;
+        line-height: 1.22;
       }
       section.card td:nth-child(3) .muted.small{
         display: block;
-        margin-top: 2px;
-        white-space: nowrap !important;   /* 門市名不要直排 */
-      }
-
-      /* 6) 日期欄固定寬，避免 / 被拆 */
-      section.card td:nth-child(4),
-      section.card th:nth-child(4){
-        width: 92px !important;
+        margin-top: 1px;
+        white-space: normal !important;
       }
 
       /* 7) 上方篩選區：一律兩行排版，避免右側被擠出去 */
@@ -807,7 +933,16 @@ const ADMIN_HTML = `<!doctype html>
       .custom-select-trigger{ width: 100% !important; }
 
       /* 8) 卡片內留白縮小，讓可視區更多 */
-      .pad{ padding: 12px !important; }
+      .pad{ padding: 10px !important; }
+      section.card th, section.card td { padding: 7px 8px !important; }
+      #list td { padding-top: 6px !important; padding-bottom: 6px !important; }
+      .order-no-cell { width: 112px !important; max-width: 112px !important; }
+      .order-no-text { font-size: 12px !important; line-height: 1.2 !important; }
+      .status-cell .pill { font-size: 11px !important; padding: 2px 6px !important; }
+      .recipient-main { font-size: 12px !important; }
+      .recipient-store { font-size: 11px !important; margin-top: 1px !important; }
+      .item-metrics { font-size: 12px !important; }
+      .item-metric-value { font-size: 14px !important; }
     }
 
     /* ===== Compact filter bar (mobile-first) ===== */
@@ -860,15 +995,134 @@ const ADMIN_HTML = `<!doctype html>
         border-radius: 12px !important;
         font-size: 13px !important;
       }
+      .header-actions button { min-height: 36px !important; padding: 8px 10px !important; }
+      .quick-status { gap: 4px !important; margin-left: 0 !important; }
+      .quick-status .custom-select.compact { min-width: 88px !important; width: 88px !important; }
+      .quick-status .custom-select-trigger.compact {
+        min-height: 34px !important;
+        padding: 6px 24px 6px 8px !important;
+        font-size: 12px !important;
+      }
+      .game-actions { grid-template-columns: 1fr !important; }
+    }
+
+    /* ===== Compact filter bar override ===== */
+    #filterCard.pad {
+      padding: 12px !important;
+      border-radius: 20px;
+    }
+    #filterCard .row2 {
+      gap: 8px !important;
+      align-items: flex-start !important;
+    }
+    #filterCard .row {
+      gap: 8px !important;
+    }
+    #filterCard #q {
+      min-height: 36px;
+      padding: 8px 12px;
+      border-radius: 12px;
+    }
+    #filterCard #stat {
+      font-size: 12px;
+      line-height: 1.2;
+    }
+    #filterCard .row2-filters {
+      gap: 6px !important;
+      align-items: center !important;
+      margin-top: 0 !important;
+      flex-wrap: nowrap !important;
+      overflow-x: auto;
+      padding-bottom: 1px;
+    }
+    #filterCard .date-inline {
+      gap: 4px;
+      flex: 0 0 auto;
+    }
+    #filterCard .date-input {
+      min-height: 34px !important;
+      height: 34px;
+      padding: 6px 8px !important;
+      width: 112px !important;
+      min-width: 112px !important;
+      border-radius: 10px !important;
+      font-size: 12px !important;
+    }
+    #filterCard .custom-select.compact {
+      min-width: 96px !important;
+      width: 96px;
+    }
+    #filterCard .custom-select-trigger.compact {
+      min-height: 34px !important;
+      padding: 6px 24px 6px 8px !important;
+      border-radius: 10px !important;
+      font-size: 12px !important;
+      background-position: right 9px center;
+    }
+    #filterCard #quickDates {
+      margin-top: 6px !important;
+      gap: 6px !important;
+    }
+    #filterCard #quickDates .qd {
+      min-height: 32px !important;
+      padding: 6px 10px !important;
+      border-radius: 10px !important;
+      font-size: 12px !important;
+      font-weight: 700;
+    }
+    #filterCard .muted.small {
+      font-size: 12px;
+      line-height: 1.2;
+    }
+    @media (max-width: 640px) {
+      #filterCard.pad { padding: 10px !important; }
+      #filterCard .row2 { gap: 6px !important; }
+      #filterCard #q {
+        min-height: 34px !important;
+        padding: 7px 10px !important;
+      }
+      #filterCard .row2-filters {
+        gap: 5px !important;
+      }
+      #filterCard .date-input {
+        min-height: 32px !important;
+        height: 32px;
+        width: 106px !important;
+        min-width: 106px !important;
+      }
+      #filterCard .custom-select.compact {
+        min-width: 90px !important;
+        width: 90px;
+      }
+      #filterCard .custom-select-trigger.compact {
+        min-height: 32px !important;
+        font-size: 12px !important;
+      }
+      #filterCard #quickDates {
+        margin-top: 4px !important;
+        gap: 5px !important;
+      }
+      #filterCard #quickDates .qd {
+        min-height: 30px !important;
+        padding: 5px 9px !important;
+      }
     }
   </style>
 </head>
 <body>
 <header id="header">
-  <div class="wrap">
-    <div class="row" style="justify-content: space-between;">
-      <div><div class="header-title" style="font-weight:600; font-size:17px; letter-spacing:-0.02em; color: var(--text);">MEME後台</div></div>
-      <div class="row"><button id="refresh" class="primary">重新載入</button></div>
+  <div class="wrap header-inner" id="headerInner">
+    <div class="row header-main">
+      <div class="header-left">
+        <div class="header-title" style="font-weight:600; font-size:17px; letter-spacing:-0.02em; color: var(--text);">MEME後台</div>
+      </div>
+      <div class="header-actions">
+        <button id="refresh" class="primary">重新載入</button>
+        <button id="playBtn" class="soft">按鈕</button>
+      </div>
+    </div>
+    <div class="row header-toggle-row">
+      <button id="pullToggle" class="pull-toggle" type="button" aria-expanded="true">上拉收合</button>
     </div>
   </div>
 </header>
@@ -887,22 +1141,24 @@ const ADMIN_HTML = `<!doctype html>
           <span class="date-tilde">～</span>
           <input type="date" id="dateTo" class="date-input" />
         </div>
-        <span class="muted small">狀態：</span>
-        <div class="custom-select compact" id="viewModeWrap">
-          <input type="hidden" id="viewMode" value="pending">
-          <button type="button" class="custom-select-trigger compact" id="viewModeTrigger">待處理</button>
-          <div class="custom-select-dropdown" id="viewModeDropdown">
-            <div class="custom-select-option selected" data-value="pending">待處理</div>
-            <div class="custom-select-option" data-value="shipped">已寄件</div>
-            <div class="custom-select-option" data-value="deleted">已刪除</div>
-          </div>
-        </div>
       </div>
       <div class="row" id="quickDates" style="margin-top:10px; gap:8px; flex-wrap:wrap;">
         <button type="button" class="qd" data-days="0">今天</button>
         <button type="button" class="qd" data-days="1">昨天</button>
         <button type="button" class="qd" data-days="7">本週</button>
         <button type="button" class="qd" data-days="9999">全部</button>
+        <div class="quick-status">
+          <span class="muted small">狀態：</span>
+          <div class="custom-select compact" id="viewModeWrap">
+            <input type="hidden" id="viewMode" value="pending">
+            <button type="button" class="custom-select-trigger compact" id="viewModeTrigger">待處理</button>
+            <div class="custom-select-dropdown" id="viewModeDropdown">
+              <div class="custom-select-option selected" data-value="pending">待處理</div>
+              <div class="custom-select-option" data-value="shipped">已寄件</div>
+              <div class="custom-select-option" data-value="deleted">已刪除</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -920,7 +1176,6 @@ const ADMIN_HTML = `<!doctype html>
               <th style="width:140px;">訂單號</th>
               <th style="width:90px;">狀態</th>
               <th>收件人</th>
-              <th style="width:95px;">日期</th>
               <th style="width:140px;">建立時間</th>
             </tr>
           </thead>
@@ -964,6 +1219,24 @@ const ADMIN_HTML = `<!doctype html>
         提示：若你已登入 Cloudflare Access，仍需輸入後台密碼才能讀取訂單。
       </div>
     </div>
+  </div>
+</div>
+
+<div id="gameOverlay" aria-hidden="true">
+  <div class="game-modal" role="dialog" aria-modal="true" aria-labelledby="gameTitle">
+    <div class="game-top">
+      <div>
+        <div id="gameTitle" class="game-title">按鈕小遊戲</div>
+        <div class="game-sub">剪刀石頭布，來一局。</div>
+      </div>
+      <button class="login-x" id="gameClose" type="button" aria-label="Close">✕</button>
+    </div>
+    <div class="game-actions">
+      <button type="button" class="soft game-pick" data-pick="石頭">石頭</button>
+      <button type="button" class="soft game-pick" data-pick="剪刀">剪刀</button>
+      <button type="button" class="soft game-pick" data-pick="布">布</button>
+    </div>
+    <div id="gameResult">按下任一按鈕開始，看看今天手氣。</div>
   </div>
 </div>
 
@@ -1012,6 +1285,41 @@ const ADMIN_HTML = `<!doctype html>
     document.body.classList.remove('modal-open');
     $('adminContent').classList.remove('locked');
   }
+  function openGame(){
+    $('gameOverlay').classList.add('show');
+    $('gameOverlay').setAttribute('aria-hidden', 'false');
+  }
+  function closeGame(){
+    $('gameOverlay').classList.remove('show');
+    $('gameOverlay').setAttribute('aria-hidden', 'true');
+  }
+  const GAME_LINES = {
+    win: [
+      '漂亮！這拳有在讀心。',
+      '你這不是猜，是預言。',
+      'CPU：我剛剛是不是被教育了？',
+      '贏得很乾淨，像剛洗完的鍵盤（騙人）。',
+      '這一局我宣布你是手指界的 MVP。'
+    ],
+    lose: [
+      '嗯…你剛剛那拳，連你自己都不信。',
+      '別怕，輸給電腦不丟臉，丟臉的是我還在笑。',
+      '你出那個，我都替你緊張。',
+      'CPU：謝謝你送分。',
+      '沒事，下一局我們假裝這局沒發生。'
+    ],
+    draw: [
+      '同一個想法，同一個痛苦。',
+      '你我都很穩，穩到不動。',
+      '這局是「默契」，不是「技術」。',
+      '平手：兩邊都不想先承認自己亂猜。'
+    ]
+  };
+  function pickRandomLine(kind){
+    const pool = GAME_LINES[kind] || [];
+    if (!pool.length) return '';
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
 
   function escapeHtml(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
   function isoDateStart(dStr){
@@ -1042,8 +1350,7 @@ const ADMIN_HTML = `<!doctype html>
     const tbody = $('list');
     tbody.innerHTML = filtered.map(o => {
       const who = [o.name, o.phone].filter(Boolean).join(' / ') || '-';
-      const dt = o.created_at ? (new Date(o.created_at)).toLocaleDateString('zh-TW',{year:'numeric',month:'2-digit',day:'2-digit'}) : '-';
-      return '<tr data-order="' + escapeHtml(o.order_no) + '" style="cursor:pointer;"><td class="mono">' + escapeHtml(o.order_no) + '</td><td>' + pill(o.status) + '</td><td>' + escapeHtml(who) + '<div class="muted small">' + escapeHtml(o.store_name || '') + '</div></td><td class="date-cell">' + escapeHtml(dt) + '</td><td class="time-cell">' + escapeHtml(fmtTime(o.created_at)) + '</td></tr>';
+      return '<tr data-order="' + escapeHtml(o.order_no) + '" style="cursor:pointer;"><td class="mono order-no-cell"><div class="order-no-text">' + escapeHtml(o.order_no) + '</div></td><td class="status-cell">' + pill(o.status) + '</td><td class="recipient-cell"><div class="recipient-main">' + escapeHtml(who) + '</div><div class="muted small recipient-store">' + escapeHtml(o.store_name || '') + '</div></td><td class="time-cell">' + escapeHtml(fmtTime(o.created_at)) + '</td></tr>';
     }).join('');
 
     $('stat').textContent = '顯示 ' + filtered.length + ' / ' + (rows||[]).length;
@@ -1081,7 +1388,7 @@ const ADMIN_HTML = `<!doctype html>
 
     const items = order.items || [];
     const itemsHtml = items.length
-      ? items.map(it => '<div class="box item-box" style="margin-top:8px;"><div class="v">' + escapeHtml(it.product_name || '-') + '</div><div class="muted small">' + escapeHtml(it.variant_text || '') + '</div><div class="muted small">數量：' + escapeHtml(it.qty) + ' / 單價：' + escapeHtml(it.unit_price) + ' / 小計：' + escapeHtml(it.line_total) + '</div></div>').join('')
+      ? items.map(it => '<div class="box item-box" style="margin-top:8px;"><div class="v">' + escapeHtml(it.product_name || '-') + '</div><div class="muted small">' + escapeHtml(it.variant_text || '') + '</div><div class="item-metrics">數量：<span class="item-metric-value">' + escapeHtml(it.qty) + '</span> / 單價：<span class="item-metric-value">' + escapeHtml(it.unit_price) + '</span> / 小計：<span class="item-metric-value">' + escapeHtml(it.line_total) + '</span></div></div>').join('')
       : '<div class="muted small">（無商品明細）</div>';
 
     const shipText =
@@ -1218,7 +1525,41 @@ const ADMIN_HTML = `<!doctype html>
     loadList();
   }
 
-  $('refresh').addEventListener('click', async () => { await loadList(); toast('已重新載入'); });
+  $('refresh').addEventListener('click', () => {
+    toast('重新整理頁面中...');
+    setTimeout(() => window.location.reload(), 120);
+  });
+  $('playBtn')?.addEventListener('click', () => {
+    $('gameResult').textContent = '按下任一按鈕開始，看看今天手氣。';
+    openGame();
+  });
+  $('pullToggle')?.addEventListener('click', () => {
+    const collapsed = document.body.classList.toggle('header-collapsed');
+    const txt = collapsed ? '下拉展開' : '上拉收合';
+    $('pullToggle').textContent = txt;
+    $('pullToggle').setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    toast(collapsed ? '已收合上方橫條' : '已展開上方橫條');
+  });
+  $('gameClose')?.addEventListener('click', () => closeGame());
+  $('gameOverlay')?.addEventListener('click', (e) => { if (e.target === $('gameOverlay')) closeGame(); });
+  document.querySelectorAll('.game-pick').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const mine = btn.getAttribute('data-pick') || '';
+      const options = ['石頭', '剪刀', '布'];
+      const cpu = options[Math.floor(Math.random() * options.length)];
+      let kind = 'draw';
+      if (mine !== cpu) {
+        const win =
+          (mine === '石頭' && cpu === '剪刀') ||
+          (mine === '剪刀' && cpu === '布') ||
+          (mine === '布' && cpu === '石頭');
+        kind = win ? 'win' : 'lose';
+      }
+      const line = pickRandomLine(kind);
+      const title = kind === 'win' ? '你贏了' : kind === 'lose' ? '你輸了' : '平手';
+      $('gameResult').textContent = '你出：' + mine + '｜CPU 出：' + cpu + '｜' + title + '。' + line;
+    });
+  });
   $('q').addEventListener('input', () => loadList());
   initCustomSelect('viewModeWrap', 'viewMode', 'viewModeTrigger', 'viewModeDropdown');
   document.querySelectorAll('#quickDates .qd').forEach((btn) => {
@@ -1261,7 +1602,10 @@ const ADMIN_HTML = `<!doctype html>
 
   $('loginClose')?.addEventListener('click', () => { toast('請先登入'); try { $('adminPw').focus(); } catch {} });
   $('loginOverlay')?.addEventListener('click', (e) => { if (e.target === $('loginOverlay')) { toast('請先登入'); try { $('adminPw').focus(); } catch {} } });
-  window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('loginOverlay')?.classList.contains('show')) { e.preventDefault(); toast('請先登入'); try { $('adminPw').focus(); } catch {} } });
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && $('gameOverlay')?.classList.contains('show')) { e.preventDefault(); closeGame(); return; }
+    if (e.key === 'Escape' && $('loginOverlay')?.classList.contains('show')) { e.preventDefault(); toast('請先登入'); try { $('adminPw').focus(); } catch {} }
+  });
 
   // 進頁面：固定先開登入遮罩（你要求的行為）
   $('adminContent').classList.add('visible');

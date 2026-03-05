@@ -1413,7 +1413,7 @@ const BASE_PRODUCTS: Product[] = [
     name: '充電式USB',
     tag: 'grinder_420',
     price: 500,
-    image: '/products/THC1.jpg',
+    image: '/products/THC.jpg',
     images: ['/products/THC1.jpg', '/products/THC.jpg'],
     shortDesc: '研磨器專家',
     specs: [

@@ -68,6 +68,41 @@
       </div>
     </div>
 
+    <!-- 下一步 -->
+    <div class="panel">
+      <div class="panel-h">接下來該做什麼？</div>
+
+      <div class="steps">
+        <div class="step">
+          <div class="n">1</div>
+          <div>
+            <div class="st">等待確認</div>
+            <div class="sd">我們將在 24 小時內確認您的訂單</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="n">2</div>
+          <div>
+            <div class="st">商品配送</div>
+            <div class="sd">確認後 3–5 個工作天內送達指定門市</div>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="n">3</div>
+          <div>
+            <div class="st">到店取貨</div>
+            <div class="sd">收到通知後請攜證件取貨</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="remind">
+        提醒：請保存您的訂單號，用於查詢訂單狀態與取貨時使用。
+      </div>
+    </div>
+
     <!-- 收件資訊（置中） -->
     <div class="panel">
       <div class="panel-h">收件資訊</div>
@@ -107,41 +142,6 @@
       </div>
 
       <div v-else class="empty-items">（無商品資料）</div>
-    </div>
-
-    <!-- 下一步 -->
-    <div class="panel">
-      <div class="panel-h">接下來該做什麼？</div>
-
-      <div class="steps">
-        <div class="step">
-          <div class="n">1</div>
-          <div>
-            <div class="st">等待確認</div>
-            <div class="sd">我們將在 24 小時內確認您的訂單</div>
-          </div>
-        </div>
-
-        <div class="step">
-          <div class="n">2</div>
-          <div>
-            <div class="st">商品配送</div>
-            <div class="sd">確認後 3–5 個工作天內送達指定門市</div>
-          </div>
-        </div>
-
-        <div class="step">
-          <div class="n">3</div>
-          <div>
-            <div class="st">到店取貨</div>
-            <div class="sd">收到通知後請攜證件取貨</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="remind">
-        提醒：請保存您的訂單號，用於查詢訂單狀態與取貨時使用。
-      </div>
     </div>
 
     <!-- 客服 -->

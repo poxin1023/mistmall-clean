@@ -125,6 +125,7 @@ function goDetail() {
 
 .meta-left {
   min-width: 0;
+  padding-right: 6px;
 }
 
 .sold {
@@ -152,7 +153,9 @@ function goDetail() {
   max-width: 56%;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-right: 2px;
-  flex: 0 1 auto;
+  margin-left: auto;
+  margin-right: 0;
+  flex: 0 0 auto;
+  transform: translateX(8px);
 }
 </style>
