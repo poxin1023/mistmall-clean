@@ -4,9 +4,9 @@ workers_dev = false
 preview_urls = false
 compatibility_date = "2025-01-01"
 
-routes = [
-  { pattern = "api.oito.uk/*", zone_name = "oito.uk" }
-]
+[[routes]]
+pattern = "api.oito.uk"
+custom_domain = true
 
 [vars]
 ALLOWED_ORIGINS = "https://www.oito.uk"
