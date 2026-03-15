@@ -5,11 +5,11 @@ preview_urls = false
 compatibility_date = "2025-01-01"
 
 routes = [
-  { pattern = "api.kissgood.co/*", zone_name = "kissgood.co" }
+  { pattern = "api.oito.uk/*", zone_name = "oito.uk" }
 ]
 
 [vars]
-ALLOWED_ORIGINS = "https://mistmall-clean-b.pages.dev,https://shop.kissgood.co"
+ALLOWED_ORIGINS = "https://www.oito.uk"
 
 [[d1_databases]]
 binding = "DB"

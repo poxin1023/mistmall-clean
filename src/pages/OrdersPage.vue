@@ -43,8 +43,8 @@
         />
       </div>
 
-      <button class="submit" type="button" @click="onSearch">
-        查詢訂單
+      <button class="submit" type="button" :disabled="searching" @click="onSearch">
+        {{ searching ? '查詢中…' : '查詢訂單' }}
       </button>
 
       <div v-if="err" class="err">{{ err }}</div>
@@ -130,54 +130,95 @@ const err = ref('')
 const searched = ref(false)
 const list = ref<OrderPayload[]>([])
 const copiedOrderNo = ref('')
+const searching = ref(false)
 let copiedTimer: number | null = null
 
 function validPhoneTw(v: string) {
   return /^09\d{8}$/.test(v)
 }
 
-function readAllOrders(): OrderPayload[] {
-  // 主要：從 localStorage 讀所有訂單
-  const raw = localStorage.getItem('orders_v1')
-  if (raw) {
-    try {
-      const arr = JSON.parse(raw) as OrderPayload[]
-      if (Array.isArray(arr)) return arr
-    } catch {}
+function statusLabel(status?: string) {
+  const map: Record<string, string> = {
+    pending: '待確認',
+    shipped: '已寄件',
+    cancelled: '已取消',
+    deleted: '已刪除'
   }
-
-  // 保底：如果你目前只有 sessionStorage last_order，也能先查到 1 筆
-  const last = sessionStorage.getItem('last_order')
-  if (last) {
-    try {
-      const one = JSON.parse(last) as OrderPayload
-      return [one]
-    } catch {}
-  }
-
-  return []
+  const key = String(status ?? '').toLowerCase().trim()
+  return map[key] || status || '待確認'
 }
 
-function onSearch() {
+function formatCreatedAt(v: string) {
+  if (!v) return ''
+  const d = new Date(v)
+  if (Number.isNaN(d.getTime())) return v
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${y}/${m}/${day} ${hh}:${mm}`
+}
+
+function apiBase() {
+  const host = window.location.hostname
+  const WORKER_LOCAL = String(import.meta.env.VITE_API_BASE_LOCAL ?? 'http://127.0.0.1:8787').trim()
+  const API_LAN = String(import.meta.env.VITE_API_BASE_LAN ?? '').trim()
+  const API_PROD = 'https://api.oito.uk'
+
+  const isLocalhost = host === 'localhost' || host === '127.0.0.1'
+  const isLanIp =
+    /^192\.168\.\d+\.\d+$/.test(host) ||
+    /^10\.\d+\.\d+\.\d+$/.test(host) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(host)
+
+  if (isLocalhost) return WORKER_LOCAL
+  if (isLanIp) return API_LAN || API_PROD
+  return API_PROD
+}
+
+async function onSearch() {
+  if (searching.value) return
   err.value = ''
   searched.value = true
+  list.value = []
 
   const p = phone.value.trim()
   if (!validPhoneTw(p)) {
     err.value = '請輸入正確手機號碼（09xxxxxxxx）。'
-    list.value = []
     return
   }
 
-  const all = readAllOrders()
-  const filtered = all
-    .filter(o => (o.phone || '').trim() === p)
-    // createdAt 是字串，這裡用 orderNo（含時間）或 fallback 直接 reverse
-    .slice()
-    .reverse()
-    .slice(0, 3)
+  searching.value = true
+  try {
+    const url = `${apiBase()}/api/orders?phone=${encodeURIComponent(p)}`
+    const res = await fetch(url)
+    const text = await res.text()
+    let data: any = null
+    try { data = text ? JSON.parse(text) : null } catch { data = null }
 
-  list.value = filtered
+    if (!res.ok) {
+      const msg = data?.error || data?.message || `HTTP ${res.status}`
+      throw new Error(msg)
+    }
+
+    const rows = Array.isArray(data?.orders) ? data.orders : []
+    list.value = rows.map((row: any) => ({
+      orderNo: String(row?.order_no ?? ''),
+      createdAt: formatCreatedAt(String(row?.created_at ?? '')),
+      total: Number(row?.amount ?? 0),
+      name: '',
+      phone: String(row?.phone ?? p),
+      storeNo: String(row?.store_no ?? ''),
+      storeName: String(row?.store_name ?? ''),
+      storeAddress: String(row?.store_address ?? ''),
+      status: statusLabel(String(row?.status ?? ''))
+    }))
+  } catch (e: any) {
+    err.value = `查詢失敗：${e?.message || '請稍後再試'}`
+  } finally {
+    searching.value = false
+  }
 }
 
 async function copy(text: string) {
@@ -300,18 +341,37 @@ onBeforeUnmount(() => {
 .row{
   display:flex;
   justify-content: space-between;
-  align-items:center;
+  align-items:flex-start;
   gap: 10px;
   padding: 8px 0;
   border-top: 1px solid #f3f4f6;
 }
 .row:first-child{ border-top: 0; padding-top: 0; }
-.k{ font-weight: 900; opacity: .7; }
-.v{ font-weight: 900; text-align: right; }
+.k{
+  flex: 0 0 72px;
+  font-weight: 900;
+  opacity: .7;
+  line-height: 1.5;
+}
+.v{
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 900;
+  text-align: right;
+  line-height: 1.5;
+  word-break: break-word;
+}
 .mono{ font-family: ui-monospace, Menlo, Consolas, monospace; }
+.v.mono{
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 
 .copy{
-  margin-left: 8px;
+  margin-left: 0;
   height: 28px;
   padding: 0 10px;
   border-radius: 10px;

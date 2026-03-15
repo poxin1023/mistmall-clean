@@ -124,6 +124,13 @@ function goTelegram() {
 
   pointer-events: none;
   overflow: hidden;
+  isolation: isolate;
+  background-clip: padding-box;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  /* 行動端圓角抗鋸齒：避免玻璃特效在角落露出小尖角 */
+  clip-path: inset(0 round 16px);
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
 }
 
 /* 燈光波浪 */
@@ -332,10 +339,17 @@ function goTelegram() {
   width: 68px;
   height: 68px;
   border-radius: 999px;
-  border: 1px solid #d1d5db;
-  background: #fff;
+  border: 1px solid rgba(255,255,255,0.56);
+  background: rgba(255,255,255,0.58);
+  backdrop-filter: blur(12px) saturate(135%);
+  -webkit-backdrop-filter: blur(12px) saturate(135%);
   color:#000;
   font-size:28px;
+  font-weight: 900;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
   box-shadow:0 12px 24px rgba(0,0,0,.2);
   cursor: pointer;
   touch-action: manipulation;
@@ -392,6 +406,8 @@ function goTelegram() {
     bottom: calc(12px + 72px + 14px);
     padding: 9px 12px;
     font-size: 12px;
+    /* 手機端再加強圓角裁切，修正角角 */
+    clip-path: inset(0 round 14px);
   }
 
   .fab-wrap{
@@ -406,7 +422,7 @@ function goTelegram() {
   }
 
   .fab-close{
-    background: #fff;
+    background: rgba(255,255,255,0.58);
   }
 
   .fab-item{
@@ -460,6 +476,7 @@ function goTelegram() {
   .order-tip::after{
     opacity: .52;
     filter: blur(10px);
+    mix-blend-mode: normal;
   }
 }
 

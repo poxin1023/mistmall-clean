@@ -17,7 +17,7 @@
         aria-label="關閉下單完成提醒"
         @click="closeCompleteModal"
       >
-        ×
+        <span class="complete-modal-close-icon" aria-hidden="true">×</span>
       </button>
       <img class="complete-modal-image" src="/products/127.png" alt="下單完成提醒" />
     </div>
@@ -268,22 +268,29 @@ onBeforeUnmount(() => {
   right: 8px;
   width: 34px;
   height: 34px;
+  padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.52);
   border-radius: 999px;
   background: linear-gradient(155deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.15));
   backdrop-filter: blur(10px) saturate(150%);
   -webkit-backdrop-filter: blur(10px) saturate(150%);
   color: #000;
-  display: grid;
-  place-items: center;
-  font-size: 20px;
-  font-weight: 900;
-  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   box-shadow:
     0 8px 16px rgba(15, 23, 42, 0.28),
     inset 0 1px 0 rgba(255, 255, 255, 0.35);
   z-index: 2;
+}
+
+.complete-modal-close-icon{
+  display: block;
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+  transform: translateY(-0.5px);
 }
 
 .complete-modal-close:active{

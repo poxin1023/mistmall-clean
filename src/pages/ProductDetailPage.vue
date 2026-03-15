@@ -347,7 +347,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .summary .row { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; }
 .summary .total { margin-top: 16px; font-size: 18px; line-height: 1.2; word-break: break-word; overflow-wrap: anywhere; color: #2563eb; font-weight: 900; }
 .summary .total b { color: #2563eb; }
-.btn.primary { width: 100%; margin-top: 12px; }
+.btn.primary { width: 100%; margin-top: 12px; justify-content: center; text-align: center; }
 .warn { color: #ef4444; font-size: 13px; margin-top: 10px; line-height: 1.25; word-break: break-word; overflow-wrap: anywhere; }
 .promo{
   margin-top: 14px;
@@ -446,11 +446,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   height: 44px;
   border-radius: 999px;
   border: 0;
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.58);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: grid;
+  place-items: center;
+  padding: 0;
   cursor: pointer;
   font-size: 28px;
   line-height: 1;
   font-weight: 900;
+  color: #000;
   z-index: 10000;
 }
 

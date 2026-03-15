@@ -17,6 +17,8 @@ const MAX_ITEM_NAME = 200
 const MAX_ITEM_SPECS = 500
 const RATE_LIMIT_ORDERS = 10
 const RATE_LIMIT_WINDOW_MS = 60_000
+const RATE_LIMIT_ORDER_QUERY = 30
+const RATE_LIMIT_ORDER_QUERY_WINDOW_MS = 60_000
 const RATE_LIMIT_ADMIN = 100
 const RATE_LIMIT_ADMIN_WINDOW_MS = 60_000
 
@@ -1107,6 +1109,89 @@ const ADMIN_HTML = `<!doctype html>
         padding: 5px 9px !important;
       }
     }
+
+    /* ===== Final sync patch: desktop + mobile-first ===== */
+    .grid {
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+      align-items: start;
+    }
+    section.card,
+    aside.card {
+      min-width: 0;
+    }
+    #filterCard .row,
+    #filterCard .row2,
+    #filterCard .row2-filters {
+      min-width: 0;
+    }
+    #filterCard #q {
+      flex: 1 1 280px;
+      min-width: 200px;
+      width: auto;
+    }
+    #filterCard #stat {
+      white-space: nowrap;
+    }
+
+    @media (max-width: 960px) {
+      .wrap { padding: 14px; }
+      .grid { grid-template-columns: 1fr; }
+      section.card .pad[style*="padding-top:0"],
+      #detail {
+        max-height: none;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .wrap { padding: 10px !important; }
+      .grid { gap: 10px !important; }
+      .card { border-radius: 16px !important; }
+      .pad { padding: 10px !important; }
+
+      #filterCard #q {
+        width: 100% !important;
+        min-width: 0 !important;
+        min-height: 40px !important;
+        font-size: 14px !important;
+      }
+      #filterCard #stat {
+        width: 100%;
+        white-space: normal;
+      }
+      #filterCard .row2-filters {
+        flex-wrap: wrap !important;
+        overflow-x: visible !important;
+      }
+      #filterCard .date-inline {
+        width: 100%;
+      }
+      #filterCard .date-input {
+        flex: 1 1 0;
+        width: auto !important;
+        min-width: 0 !important;
+      }
+      #filterCard #quickDates {
+        width: 100%;
+      }
+      #filterCard #quickDates .qd {
+        min-height: 38px !important;
+        font-size: 13px !important;
+      }
+      .header-actions button,
+      .btnbar button,
+      .login-actions button.primary,
+      #filterCard .custom-select-trigger,
+      #filterCard .custom-select-trigger.compact {
+        min-height: 42px !important;
+      }
+
+      section.card table {
+        min-width: 600px !important;
+      }
+      .order-no-cell { width: 120px !important; max-width: 120px !important; }
+      .status-cell { width: 84px; }
+      .time-cell { min-width: 118px; }
+    }
   </style>
 </head>
 <body>
@@ -1619,7 +1704,7 @@ export default {
     void ctx
     const url = new URL(req.url)
     const origin = req.headers.get("origin")
-    const allowedOrigins = env.ALLOWED_ORIGINS || "http://localhost:5173,http://127.0.0.1:5173"
+    const allowedOrigins = env.ALLOWED_ORIGINS || "https://www.oito.uk"
     const preflightHeaders = corsHeaders(origin, allowedOrigins)
 
     // CORS preflight
@@ -1705,6 +1790,30 @@ export default {
         const message = e instanceof Error ? e.message : String(e)
         return json({ ok: false, error: message }, { status: 500, allowedOrigins, origin })
       }
+    }
+
+    // Orders query (customer)
+    if (url.pathname === "/api/orders" && req.method === "GET") {
+      const ip = getClientIp(req)
+      const rl = await checkRateLimit(env.DB, "order_query", ip, RATE_LIMIT_ORDER_QUERY, RATE_LIMIT_ORDER_QUERY_WINDOW_MS)
+      if (!rl.allowed) return json(safeError("Too many requests"), { status: 429, allowedOrigins, origin })
+
+      const phone = String(url.searchParams.get("phone") ?? "").trim()
+      if (!/^09\d{8}$/.test(phone)) {
+        return json(safeError("Invalid phone"), { status: 400, allowedOrigins, origin })
+      }
+
+      const rows = await env.DB.prepare(
+        `SELECT order_no, created_at, status, amount, phone, store_no, store_name, store_address
+         FROM orders
+         WHERE phone = ? AND status != 'deleted'
+         ORDER BY created_at DESC
+         LIMIT 3`
+      )
+        .bind(phone)
+        .all()
+
+      return json({ ok: true, orders: rows.results ?? [] }, { allowedOrigins, origin })
     }
 
     // Admin APIs: require Access (unless local/bypass), and rate-limit

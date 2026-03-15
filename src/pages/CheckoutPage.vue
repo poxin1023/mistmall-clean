@@ -376,11 +376,60 @@ function validPhoneTw(v: string) {
   return /^09\d{8}$/.test(v)
 }
 
-/** ✅ 本機開發時要打 Worker；上線同網域時可用相對路徑 */
+function canUseLocalOrderFallback() {
+  const host = window.location.hostname
+  const force = String(import.meta.env.VITE_ALLOW_LOCAL_ORDER_FALLBACK ?? '') === '1'
+  if (force) return true
+  if (host === 'localhost' || host === '127.0.0.1') return true
+  if (/\.pages\.dev$/i.test(host)) return true
+  return false
+}
+
+function buildCreatedAtText() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${y}/${m}/${day} ${hh}:${mm}`
+}
+
+function buildOrderPayload(orderNo: string, items: any[], status = '待確認', rawStatus = 'pending') {
+  return {
+    orderNo,
+    createdAt: buildCreatedAtText(),
+    total: grandTotal.value,
+    name: form.name,
+    phone: form.phone,
+    storeNo: form.store?.no ?? '',
+    storeName: form.store?.name ?? '',
+    storeAddress: form.store?.address ?? '',
+    items,
+    status,
+    rawStatus
+  }
+}
+
+function saveOrderToLocal(payload: any) {
+  sessionStorage.setItem('last_order', JSON.stringify(payload))
+
+  const raw = localStorage.getItem('orders_v1')
+  let arr: any[] = []
+  if (raw) {
+    try { arr = JSON.parse(raw) } catch { arr = [] }
+    if (!Array.isArray(arr)) arr = []
+  }
+  arr.push(payload)
+  localStorage.setItem('orders_v1', JSON.stringify(arr))
+}
+
+/** ✅ API 路由：localhost 打本機 Worker；手機/LAN 預設走測試 API */
 function apiBase() {
   const host = window.location.hostname
-  const WORKER_LOCAL = 'http://127.0.0.1:8787'
-  const API_PROD = 'https://api.kissgood.co'
+  const WORKER_LOCAL = String(import.meta.env.VITE_API_BASE_LOCAL ?? 'http://127.0.0.1:8787').trim()
+  const API_LAN = String(import.meta.env.VITE_API_BASE_LAN ?? '').trim()
+  const API_PROD = 'https://api.oito.uk'
 
   const isLocalhost = host === 'localhost' || host === '127.0.0.1'
   const isLanIp =
@@ -388,13 +437,35 @@ function apiBase() {
     /^10\.\d+\.\d+\.\d+$/.test(host) ||
     /^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(host)
 
-  if (isLocalhost || isLanIp) return WORKER_LOCAL
+  if (isLocalhost) return WORKER_LOCAL
+  if (isLanIp) return API_LAN || API_PROD
   return API_PROD
 }
 
+function apiBasesForOrderSubmit() {
+  const host = window.location.hostname
+  const WORKER_LOCAL = String(import.meta.env.VITE_API_BASE_LOCAL ?? 'http://127.0.0.1:8787').trim()
+  const API_LAN = String(import.meta.env.VITE_API_BASE_LAN ?? '').trim()
+  const API_PROD = 'https://api.oito.uk'
+  const API_FALLBACK = String(import.meta.env.VITE_API_BASE_FALLBACK ?? API_PROD).trim()
 
-async function postJson<T>(path: string, body: any): Promise<T> {
-  const res = await fetch(apiBase() + path, {
+  const isLocalhost = host === 'localhost' || host === '127.0.0.1'
+  const isLanIp =
+    /^192\.168\.\d+\.\d+$/.test(host) ||
+    /^10\.\d+\.\d+\.\d+$/.test(host) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(host)
+
+  const bases = isLocalhost
+    ? [WORKER_LOCAL, API_FALLBACK]
+    : isLanIp
+      ? [API_LAN || API_PROD, API_FALLBACK]
+      : [apiBase()]
+
+  return [...new Set(bases.filter(Boolean))]
+}
+
+async function postJsonToBase<T>(base: string, path: string, body: any): Promise<T> {
+  const res = await fetch(base + path, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body)
@@ -410,6 +481,21 @@ async function postJson<T>(path: string, body: any): Promise<T> {
   }
   return data as T
 }
+
+async function postJsonWithFallback<T>(path: string, body: any): Promise<T> {
+  const bases = apiBasesForOrderSubmit()
+  let lastError: unknown = null
+
+  for (const base of bases) {
+    try {
+      return await postJsonToBase<T>(base, path, body)
+    } catch (e) {
+      lastError = e
+    }
+  }
+  throw lastError ?? new Error('下單失敗：無可用 API')
+}
+
 
 /** ✅ 提交訂單：改成真的呼叫 Worker /api/orders，後台才會同步 */
 async function submitOrder() {
@@ -462,45 +548,10 @@ async function submitOrder() {
 
   submitting.value = true
   try {
-    // ✅ 真的送到 Worker（這一步做了，後台 /admin 才看得到）
-    const resp = await postJson<{ ok: boolean; orderNo: string }>('/api/orders', requestBody)
-
-    // 成功頁顯示用（用後端回傳的 orderNo，不再自產）
-    const d = new Date()
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    const hh = String(d.getHours()).padStart(2, '0')
-    const mm = String(d.getMinutes()).padStart(2, '0')
-    const createdAt = `${y}/${m}/${day} ${hh}:${mm}`
-
-    const payload = {
-      orderNo: resp.orderNo,
-      createdAt,
-      total: grandTotal.value,
-      name: form.name,
-      phone: form.phone,
-      storeNo: form.store.no,
-      storeName: form.store.name,
-      storeAddress: form.store.address,
-      items,
-      // UI 用字串（你原本查詢頁可能吃這個）
-      status: '待確認',
-      // 真正後端狀態（可選）
-      rawStatus: 'pending'
-    }
-
-    sessionStorage.setItem('last_order', JSON.stringify(payload))
-
-    // ✅ 也保留到 localStorage 供「查詢訂單」頁使用（沿用你原本邏輯）
-    const raw = localStorage.getItem('orders_v1')
-    let arr: any[] = []
-    if (raw) {
-      try { arr = JSON.parse(raw) } catch { arr = [] }
-      if (!Array.isArray(arr)) arr = []
-    }
-    arr.push(payload)
-    localStorage.setItem('orders_v1', JSON.stringify(arr))
+    // ✅ localhost 先打本機，失敗再改打測試 API，避免只落 localStorage
+    const resp = await postJsonWithFallback<{ ok: boolean; orderNo: string }>('/api/orders', requestBody)
+    const payload = buildOrderPayload(resp.orderNo, items, '待確認', 'pending')
+    saveOrderToLocal(payload)
 
     // ✅ 清空購物車
     cart.clear()
@@ -508,6 +559,14 @@ async function submitOrder() {
     // ✅ 導到成功頁
     router.push('/order-success')
   } catch (e: any) {
+    if (canUseLocalOrderFallback()) {
+      const localOrderNo = `LOCAL-${Date.now()}`
+      const payload = buildOrderPayload(localOrderNo, items, '本地測試', 'local_only')
+      saveOrderToLocal(payload)
+      cart.clear()
+      router.push('/order-success')
+      return
+    }
     errorMsg.value = `下單失敗：${e?.message || '請稍後再試'}`
   } finally {
     submitting.value = false
@@ -679,13 +738,17 @@ async function submitOrder() {
 .picked-close{
   width: 26px;
   height: 26px;
-  border-radius: 8px;
+  border-radius: 999px;
   border: 1px solid #a7f3d0;
   background: rgba(255,255,255,.9);
   cursor: pointer;
   font-size: 15px;
   line-height: 1;
   color: #ef4444;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font-weight: 900;
 }
 
 .picked-line{

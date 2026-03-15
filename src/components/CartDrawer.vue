@@ -155,12 +155,20 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   }
   .title{ font-weight:900; color:#111827; }
   .close{
-    width:34px;
-    height:34px;
-    border-radius:10px;
-    border:1px solid #e5e7eb;
-    background:#fff;
+    width:36px;
+    height:36px;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,0.56);
+    background:rgba(255,255,255,0.58);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     font-size:18px;
+    line-height:1;
+    font-weight:900;
+    color:#000;
+    display:grid;
+    place-items:center;
+    padding:0;
     cursor:pointer;
   }
   
